@@ -9,5 +9,9 @@ return PlaceObj('ModDef', {
 	'version', 3,
 	'lua_revision', 1007000,
 	'saved_with_revision', 1008224,
+	'code', {
+		"Code/BLR_1Init.lua",
+		"Code/BLR_2ModConfig.lua",
+	},
 	'saved', 1633053301,
 })
