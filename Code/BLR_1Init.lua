@@ -15,7 +15,8 @@ local StringIdBase = 17764703910 -- Better Lander Rockets    : 703910 - 703919 *
 
 -- options for Better Lander Rockets Mod
 g_BLR_Options = {
-  modEnabled = true
+  modEnabled    = true,
+  rocketOptions = true,
 }
 
 
@@ -41,11 +42,6 @@ end -- SortByDist
 local dronefilter = function(drone)
   return drone:CanBeControlled() and (not drone.holder)
 end -- dronefilter
-
--- used in ExpeditionFindRovers
-local roverfilter = function(unit)
-  return (unit.class == class) and (not unit.holder) and (unit:CanBeControlled() or quick_load or unit.command == "Idle")
-end -- roverfilter
 
 -- used in ExpeditionGatherCrew
 local function adultfilter(_, c)
@@ -216,12 +212,16 @@ function OnMsg.ClassesGenerate()
   -- for finding closest rovers to the rockets
   function CargoTransporter:BLRexpeditionFindRovers(class, quick_load, amount)
     if lf_print then print("CargoTransporter:BLRexpeditionFindRovers running") end
-    
+
+    local roverfilter = function(unit)
+      return (unit.class == class) and (not unit.holder) and ((unit:CanBeControlled() or quick_load or unit.command == "Idle"))
+    end -- roverfilter    
     
     local realm = GetRealm(self)
     local list = realm:MapGet("map", class, roverfilter) or empty_table
+    if lf_print then print(string.format("BLRexpeditionFindRovers found %d %s rovers. Want: %d", #list, class, amount)) end
     if amount > #list then
-      if lf_print then print("BLRexpeditionFindRovers could not find enough rovers.  Trying again.") end
+      if lf_print then print(string.format("BLRexpeditionFindRovers could not find enough %s rovers.  Trying again.", class)) end
       self.rover_summon_fail = true
       ObjModified(self)
       return nil
@@ -381,10 +381,49 @@ function OnMsg.ClassesGenerate()
     
     return true, rovers, drones, crew, prefabs
   end -- function CargoTransporter:Find(manifest, quick_load)
+
+
+  local BLRdefaultRocketCargoPreset = {
+    {class = "Drone",        amount = 0},
+    {class = "Fuel",         amount = 35},
+    {class = "Concrete",     amount = 0},
+    {class = "Metals",       amount = 0},
+    {class = "Polymers",     amount = 0},
+    {class = "MachineParts", amount = 0},
+  } -- BLRdefaultRocketCargoPreset
+
+  -- re-write from LanderRocket.lua
+  -- LanderRocketCargoPreset is a table from LanderRocketCargoPreset.lua
+  local Old_LanderRocketBase_SetDefaultPayload = LanderRocketBase.SetDefaultPayload
+  function LanderRocketBase:SetDefaultPayload(payload)
+    if not g_BLR_Options.modEnabled and g_BLR_Options.rocketOptions then return Old_LanderRocketBase_SetDefaultPayload(self, payload) end -- short circuit
+    if lf_print then print("SetDefaultPayload running") end
+    if ObjectIsInEnvironment(self, "Asteroid") then
+      return
+    end
+    if not self.BLRdefaultRocketCargoPreset then self.BLRdefaultRocketCargoPreset = table.copy(BLRdefaultRocketCargoPreset) or empty_table end -- make a local copy on the rocket
+    for _, entry in pairs(self.BLRdefaultRocketCargoPreset) do
+      payload:SetItem(entry.class, entry.amount)
+    end
+    CargoTransporter.FixCargoToPayloadObject(self, payload)
+  end -- LanderRocketBase:SetDefaultPayload(payload)
+ 
   
-  
-  
-  
+  -- new function
+  -- sets local default parameters to whats in the rocket at launch from mars
+  -- dont take colonists
+  function LanderRocketBase:BLRresetDefaultPayload()
+    if lf_print then print("BLRresetDefaultPayload running") end
+    local cargo = {}
+    local specialists = GetSortedColonistSpecializationTable()
+    for item, payload in pairs(self.cargo or empty_table) do
+      if (payload.amount > 0) and not table.find(specialists, payload.class) then
+        cargo[#cargo+1] = {amount = payload.amount, class = payload.class}
+      end -- if payload.amount
+    end -- for item, payload
+    self.BLRdefaultRocketCargoPreset = cargo
+    --ex(self.BLRdefaultRocketCargoPreset)
+  end -- LanderRocketBase:BLRresetDefaultPayload(payload)
   
 
   -- rewrite from ResourceOverview.lua
@@ -400,6 +439,12 @@ function OnMsg.ClassesGenerate()
   end -- ResourceOverview:GetAvailable(resource_type)
 
 end -- function OnMsg.ClassesGenerate()
+
+------------------------------------------------------------------------------------------------
+
+function OnMsg.RocketLaunched(rocket)
+  if g_BLR_Options.modEnabled and IsKindOf(rocket, "LanderRocketBase") and (not ObjectIsInEnvironment(rocket, "Asteroid")) then rocket:BLRresetDefaultPayload() end
+end -- OnMsg.RocketLaunched(rocket)
 
 
 function OnMsg.ToggleLFPrint(modname, lfvar)

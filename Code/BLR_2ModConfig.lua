@@ -35,7 +35,8 @@ local function WaitForModConfig()
       if lf_print then print(string.format("%s WaitForModConfig Thread Continuing", mod_name)) end
 
       if ModConfigLoaded and ModConfig:IsReady() then
-        g_BLR_Options.modEnabled = ModConfig:Get("Better_Lander", "modEnabled")
+        g_BLR_Options.modEnabled    = ModConfig:Get("Better_Lander", "modEnabled")
+        g_BLR_Options.rocketOptions = ModConfig:Get("Better_Lander", "rocketOptions")
 
     	  ModLog(string.format("%s detected ModConfig running - Setup Complete", mod_name))
       else
@@ -59,14 +60,22 @@ function OnMsg.ModConfigReady()
        T{StringIdBase + 1, "Options for Better Lander Rockets"} -- Optional description
     )
 
-    -- g_FW_options.modEnabled
+    -- g_BLR_Options.modEnabled
     ModConfig:RegisterOption("Better_Lander", "modEnabled", {
-        -- Texts can include images or other formatting
         name = T{StringIdBase + 2, "Enable Better Lander Rockets Mod"},
         desc = T{StringIdBase + 3, "Enable mod or disable all functions and return to game original code."},
         type = "boolean",
         default = true,
         order = 1
+    })
+    
+    -- g_BLR_Options.rocketOptions
+    ModConfig:RegisterOption("Better_Lander", "rocketOptions", {
+        name = T{StringIdBase + 4, "Per rocket options:"},
+        desc = T{StringIdBase + 5, "Enable or disable per rocket options and infopanel sections."},
+        type = "boolean",
+        default = true,
+        order = 2
     })
 
 end -- OnMsg.ModConfigReady()
@@ -79,6 +88,11 @@ function OnMsg.ModConfigChanged(mod_id, option_id, value, old_value, token)
       if option_id == "modEnabled" then
         g_BLR_Options.modEnabled = value
       end -- g_BLR_Options.modEnabled
+      
+      -- g_BLR_Options.rocketOptions
+      if option_id == "rocketOptions" then
+        g_BLR_Options.rocketOptions = value
+      end -- g_BLR_Options.rocketOptions      
       
     end -- if ModConfigLoaded
 end --OnMsg.ModConfigChanged
