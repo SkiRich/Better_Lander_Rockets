@@ -1,4 +1,14 @@
 # Better Lander Rockets
+## [v1.0] 10/04/21 12:55:47 AM
+#### Changed
+- added dummy text to status so it didnt look like it was unfolding
+- some text in mcr description
+
+#### Added
+- images and documentation
+- steam_id
+
+--------------------------------------------------------
 ## [v0.3] 10/04/21 5:04:20 PM
 #### Changed
 - renamed BLR_2ModConfig.lua to 3

@@ -2,17 +2,19 @@
 -- Author @SkiRich
 -- All rights reserved, duplication and modification prohibited.
 -- Created Sept 20th, 2021
+-- Updated Oct 4th, 2021
 
 local lf_print        = false  -- Setup debug printing in local file -- use Msg("ToggleLFPrint", "BLR", "printdebug") to toggle
 local lf_printc       = false  -- print for classes that are chatty
 local lf_printDebug   = false
 
 
-local StringIdBase = 17764706000 -- Better Lander Rockets    : 706000 - 706099  This File Start 40-89, Next: 40
+local StringIdBase = 17764706000 -- Better Lander Rockets    : 706000 - 706099  This File Start 40-89, Next: 56
 local ModDir   = CurrentModPath
 local mod_name = "Better Lander Rockets"
 local iconBLRSection  = ModDir.."UI/Icons/BLRSection.png"
 
+-- used to fix rounding errors in stock
 local function RoundResourceAmount(r)
   r = r or 0
   r = r / const.ResourceScale
@@ -21,6 +23,7 @@ local function RoundResourceAmount(r)
 end -- function RoundResourceAmount(r)
 
 
+-- set rollover text
 local function BLRsetRollOverText()
   local texts = {}
   texts[1] = T{StringIdBase + 40, "Loadout is the default cargo request when landing on Mars."}
@@ -32,6 +35,7 @@ local function BLRsetRollOverText()
 end -- BLRsetRollOverText()
 
 
+-- function to find any issues with resources on planet when loading
 local function BLRfindResourceIssues(rocket)
   local stock = {}
   GatherResourceOverviewData(stock, rocket.city or UICity) -- check the current map
@@ -48,6 +52,7 @@ local function BLRfindResourceIssues(rocket)
 end -- BLRfindResourceIssues(rocket)
 
 
+-- function to find any cargo issues on the rocket when loading
 local function BLRfindCargoIssues(rocket)
   local cargo = rocket:BuildCargoInfo(rocket.cargo)
   local issues = {}
@@ -62,6 +67,7 @@ local function BLRfindCargoIssues(rocket)
 end -- BLRfindCargoIssues(rocket)
 
 
+-- status texts for infopanel section
 function BLRgetStatusTexts(rocket)
   local texts = {}
   local cargoIssue, cargoIssueTxt = BLRfindCargoIssues(rocket)
@@ -166,7 +172,7 @@ function OnMsg.ClassesBuilt()
               "__template", "InfopanelText",
               "Id", "idBLRstatusText",
               "Margins", box(0, 0, 0, 0),
-              "Text", " ",
+              "Text", T{StringIdBase + 55, "Loadout:<newline>Launch Issues:<newline>Cargo Issues:<newline>Resource Issues:"},
               "OnContextUpdate", function(self, context)
                 self:SetText(BLRgetStatusTexts(context))
               end, -- OnContextUpdate

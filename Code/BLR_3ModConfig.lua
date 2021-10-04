@@ -3,13 +3,14 @@
 -- All rights reserved, duplication and modification prohibited.
 -- You may not copy it, package it, or claim it as your own.
 -- Created Sept 30th, 2021
+-- Updated Oct 4th, 2021
 
 local lf_print = false -- Setup debug printing in local file
                        -- Use if lf_print then print("something") end
 
 local StringIdBase = 17764706000 -- Better Lander Rockets    : 706000 - 706099  This File Start 0-29, Next: 6
 local mod_name = "Better Lander Rockets"
-local steam_id = "0"
+local steam_id = "2619013940"
 local TableFind  = table.find
 local ModConfig_id        = "1542863522"
 local ModConfigWaitThread = false
@@ -64,7 +65,7 @@ function OnMsg.ModConfigReady()
     -- g_BLR_Options.modEnabled
     ModConfig:RegisterOption("Better_Lander", "modEnabled", {
         name = T{StringIdBase + 2, "Enable Better Lander Rockets Mod"},
-        desc = T{StringIdBase + 3, "Enable mod or disable all functions and return to game original code."},
+        desc = T{StringIdBase + 3, "Enable mod or disable all functions and fixes and return to game original code."},
         type = "boolean",
         default = true,
         order = 1
@@ -72,8 +73,8 @@ function OnMsg.ModConfigReady()
     
     -- g_BLR_Options.rocketOptions
     ModConfig:RegisterOption("Better_Lander", "rocketOptions", {
-        name = T{StringIdBase + 4, "Per rocket options:"},
-        desc = T{StringIdBase + 5, "Enable or disable per rocket options and infopanel sections."},
+        name = T{StringIdBase + 4, "Rocket options:"},
+        desc = T{StringIdBase + 5, "Enable or disable individual rocket options such as Loadout keep all fixes"},
         type = "boolean",
         default = true,
         order = 2
