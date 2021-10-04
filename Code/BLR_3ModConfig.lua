@@ -7,8 +7,9 @@
 local lf_print = false -- Setup debug printing in local file
                        -- Use if lf_print then print("something") end
 
-local StringIdBase = 17764703910 -- Better Lander Rockets    : 703910 - 703919 ** 
+local StringIdBase = 17764706000 -- Better Lander Rockets    : 706000 - 706099  This File Start 0-29, Next: 6
 local mod_name = "Better Lander Rockets"
+local steam_id = "0"
 local TableFind  = table.find
 local ModConfig_id        = "1542863522"
 local ModConfigWaitThread = false
@@ -106,3 +107,31 @@ end -- OnMsg.CityStart()
 function OnMsg.LoadGame()
   WaitForModConfig()
 end -- OnMsg.LoadGame()
+
+
+local function SRDailyPopup()
+    CreateRealTimeThread(function()
+        local params = {
+              title = "Non-Author Mod Copy",
+               text = "We have detected an illegal copy version of : ".. mod_name .. ". Please uninstall the existing version.",
+            choice1 = "Download the Original [Opens in new window]",
+            choice2 = "Damn you copycats!",
+            choice3 = "I don't care...",
+              image = "UI/Messages/death.tga",
+              start_minimized = false,
+        } -- params
+        local choice = WaitPopupNotification(false, params)
+        if choice == 1 then
+          OpenUrl("https://steamcommunity.com/sharedfiles/filedetails/?id=" .. steam_id, true)
+        end -- if statement
+    end ) -- CreateRealTimeThread
+end -- function end
+
+
+function OnMsg.NewDay(day)
+  if table.find(ModsLoaded, "steam_id", steam_id)~= nil then
+    --nothing
+  else
+    SRDailyPopup()
+  end -- SRDailyPopup
+end --OnMsg.NewDay(day)

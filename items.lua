@@ -4,7 +4,11 @@ PlaceObj('ModItemCode', {
 	'FileName', "Code/BLR_1Init.lua",
 }),
 PlaceObj('ModItemCode', {
-	'name', "BLR_2ModConfig",
-	'FileName', "Code/BLR_2ModConfig.lua",
+	'name', "BLR_2Panels",
+	'FileName', "Code/BLR_2Panels.lua",
+}),
+PlaceObj('ModItemCode', {
+	'name', "BLR_3ModConfig",
+	'FileName', "Code/BLR_3ModConfig.lua",
 }),
 }

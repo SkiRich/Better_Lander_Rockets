@@ -7,11 +7,12 @@ local lf_print        = false  -- Setup debug printing in local file -- use Msg(
 local lf_printc       = false  -- print for classes that are chatty
 local lf_printDebug   = false
 
+local mod_name = "Better Lander Rockets"
 local table = table
 local ObjModified = ObjModified
 local Sleep = Sleep
 
-local StringIdBase = 17764703910 -- Better Lander Rockets    : 703910 - 703919 ** 
+local StringIdBase = 17764706000 -- Better Lander Rockets    : 706000 - 706099  This File Start 90-99, Next: 90
 
 -- options for Better Lander Rockets Mod
 g_BLR_Options = {
@@ -383,7 +384,7 @@ function OnMsg.ClassesGenerate()
   end -- function CargoTransporter:Find(manifest, quick_load)
 
 
-  local BLRdefaultRocketCargoPreset = {
+  local BLR_defaultRocketCargoPreset = {
     {class = "Drone",        amount = 0},
     {class = "Fuel",         amount = 35},
     {class = "Concrete",     amount = 0},
@@ -391,6 +392,15 @@ function OnMsg.ClassesGenerate()
     {class = "Polymers",     amount = 0},
     {class = "MachineParts", amount = 0},
   } -- BLRdefaultRocketCargoPreset
+  
+  local LanderRocketCargoPreset = LanderRocketCargoPreset or {
+    {class = "Drone", amount = 6},
+    {class = "Fuel", amount = 35},
+    {class = "Concrete", amount = 5},
+    {class = "Metals", amount = 15},
+    {class = "Polymers", amount = 10},
+    {class = "MachineParts", amount = 5}
+  } -- LanderRocketCargoPreset
 
   -- re-write from LanderRocket.lua
   -- LanderRocketCargoPreset is a table from LanderRocketCargoPreset.lua
@@ -401,10 +411,19 @@ function OnMsg.ClassesGenerate()
     if ObjectIsInEnvironment(self, "Asteroid") then
       return
     end
-    if not self.BLRdefaultRocketCargoPreset then self.BLRdefaultRocketCargoPreset = table.copy(BLRdefaultRocketCargoPreset) or empty_table end -- make a local copy on the rocket
-    for _, entry in pairs(self.BLRdefaultRocketCargoPreset) do
+    if not self.BLR_loadout then self.BLR_loadout = "Remember" end
+    if not self.BLR_defaultRocketCargoPreset then self.BLR_defaultRocketCargoPreset = table.copy(BLR_defaultRocketCargoPreset) or empty_table end -- make a local copy on the rocket
+    if self.BLR_loadout == "Remember" then
+      self.BLR_defaultRocketCargoPreset = table.copy(self.BLR_defaultRocketCargoPreset) or empty_table
+    elseif self.BLR_loadout == "Default" then
+      self.BLR_defaultRocketCargoPreset = table.copy(LanderRocketCargoPreset) or empty_table
+    elseif self.BLR_loadout == "Nothing" then
+      return
+    end --  if self.BLR_loadout
+    
+    for _, entry in pairs(self.BLR_defaultRocketCargoPreset) do
       payload:SetItem(entry.class, entry.amount)
-    end
+    end -- for _,
     CargoTransporter.FixCargoToPayloadObject(self, payload)
   end -- LanderRocketBase:SetDefaultPayload(payload)
  
@@ -421,7 +440,7 @@ function OnMsg.ClassesGenerate()
         cargo[#cargo+1] = {amount = payload.amount, class = payload.class}
       end -- if payload.amount
     end -- for item, payload
-    self.BLRdefaultRocketCargoPreset = cargo
+    self.BLR_defaultRocketCargoPreset = cargo
     --ex(self.BLRdefaultRocketCargoPreset)
   end -- LanderRocketBase:BLRresetDefaultPayload(payload)
   

@@ -1,4 +1,16 @@
 # Better Lander Rockets
+## [v0.3] 10/04/21 5:04:20 PM
+#### Changed
+- renamed BLR_2ModConfig.lua to 3
+- changes items and metadata
+- changed StringIdBase - needed more numbers
+
+#### Added
+- BLR_2Panels.lua and panel code
+- local LanderRocketCargoPreset as a copy of the preset incase the devs remove it or localize it
+- added loadout logic
+
+--------------------------------------------------------
 ## [v0.2] 10/01/21 6:34:24 PM
 #### Changed
 - consolidated the filter functions and renamed them
