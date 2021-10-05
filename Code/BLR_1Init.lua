@@ -6,6 +6,7 @@
 
 local lf_print        = false  -- Setup debug printing in local file -- use Msg("ToggleLFPrint", "BLR", "printdebug") to toggle
 local lf_printc       = false  -- print for classes that are chatty
+local lf_printd       = false  -- print dialog redirect debugs
 local lf_printDebug   = false
 
 local mod_name = "Better Lander Rockets"
@@ -13,7 +14,8 @@ local table = table
 local ObjModified = ObjModified
 local Sleep = Sleep
 
-local StringIdBase = 17764706000 -- Better Lander Rockets    : 706000 - 706099  This File Start 90-99, Next: 90
+local StringIdBase  = 17764706000 -- Better Lander Rockets    : 706000 - 706099  This File Start 90-99, Next: 90
+local enforceFilter = false -- enforce filtering in GetAvailableColonistsForCategory 
 
 -- options for Better Lander Rockets Mod
 g_BLR_Options = {
@@ -21,6 +23,7 @@ g_BLR_Options = {
   rocketOptions = true,
 }
 
+g_BLR_PayloadRequest_Thread = false -- thread holder for dialog repaint
 
 
 -- copy of local function from ResourceOverview.lua
@@ -51,7 +54,135 @@ local function adultfilter(_, c)
 	return not (c.traits.Child or c.traits.Tourist or (c.traits.Senior and not workingSeniors)) -- use not workingSeniors here to negate the original not and allow the senior
 end -- adultfilter
 
+
+-- OnAction function replacement since the original xTemplate version is busted
+-- replaced by function LanderRocketBase:UIEditPayloadRequest() below
+local BLRonAction = function(self, host, source)
+  local obj = host.parent.context.object
+  local cargo = obj.cargo
+  local passenger_manifest = host.context.traits_object.approved_per_trait or empty_table
+  local set_cargo_request_cb = function()
+    obj.target_spot = obj.requested_spot or obj.target_spot
+    obj.requested_spot = false
+    obj:SetCargoRequest(g_RocketCargo, passenger_manifest)
+  end
+  local reset_cargo_request_cb = function()
+    obj.cargo = cargo
+  end
+  local requested_cargo = 0
+  local requested_passengers = 0
+  table.foreachi_value(g_RocketCargo, function(v)
+    requested_cargo = requested_cargo + v.amount
+  end)
+  table.foreach_value(passenger_manifest, function(v)
+    requested_passengers = requested_passengers + v
+  end)
+  CreateRealTimeThread(function()
+    local res
+    local target_spot = obj.target_spot or obj.requested_spot -- fixed
+    if requested_cargo == 0 and requested_passengers == 0 then
+      res = WaitPopupNotification("LaunchIssue_CargoEmpty", {}, false, terminal.desktop)
+    elseif obj.requested_spot and requested_passengers > 0 then
+      if not obj.requested_spot.asteroid.available then
+        res = WaitPopupNotification("LaunchIssue_AsteroidHabitat", {
+          number1 = requested_passengers,
+          number2 = BuildingTemplates.MicroGHabitat.capacity
+        }, false, terminal.desktop)
+      elseif requested_passengers > GetAvailableResidences(Cities[target_spot.map]) then -- fixed
+        res = WaitPopupNotification("LaunchIssue_AsteroidHabitatRepeat", {
+          number1 = requested_passengers,
+          number2 = GetAvailableResidences(Cities[obj.requested_spot.map])
+        }, false, terminal.desktop)
+      end
+    end
+    if not res or res == 1 then
+      set_cargo_request_cb()
+    else
+      reset_cargo_request_cb()
+    end
+  end, self)
+  CloseDialog("PayloadRequest")
+end -- OnAction function replacement BLRonAction
+
 ------------------------------------------- OnMsgs --------------------------------------------------
+function OnMsg.ClassesBuilt()
+  
+  
+  local Old_TraitsObject_GetAvailableColonistsForCategory = TraitsObjectGetAvailableColonistsForCategory
+  function TraitsObject:GetAvailableColonistsForCategory(city, category)
+    if not g_BLR_Options.modEnabled and (not enforceFilter) then return Old_TraitsObject_GetAvailableColonistsForCategory(self, city, category) end -- short circuit
+    city = city or UICity 
+    category = category or "Colonist"
+    local filteredColonists = city.labels[category] and table.ifilter(city.labels[category], adultfilter) or empty_table
+    if lf_print then print(string.format("---- Filter found %d %s", #filteredColonists, category)) end
+    --local available = #filteredColonists
+    --for _, colonist in ipairs(city.labels.Colonist or empty_table) do
+    --  if colonist.traits[category] and (category ~= "Tourist" and not colonist.traits.Tourist or category == "Tourist" and colonist.traits.Tourist) then
+    --    available = available + 1
+    --  end
+    --end
+    return #filteredColonists or 0
+  end -- TraitsObject:GetAvailableColonistsForCategory(city, category)
+
+
+
+  local Old_LanderRocketBase_UIEditPayloadRequest = LanderRocketBase.UIEditPayloadRequest
+  function LanderRocketBase:UIEditPayloadRequest()
+    if not g_BLR_Options.modEnabled then return Old_LanderRocketBase_UIEditPayloadRequest(self) end -- short circuit
+    if lf_printd then print("-- g_BLR_PayloadRequest_Thread Function started --") end
+    --if true then return Old_LanderRocketBase_UIEditPayloadRequest(self) end
+    
+    enforceFilter = true -- enforce filter in GetAvailableColonistsForCategory
+    
+    -- start realtime thread to watch for variables
+    DeleteThread(g_BLR_PayloadRequest_Thread) -- just in case
+    g_BLR_PayloadRequest_Thread = CreateRealTimeThread(function()
+      if lf_printd then print("-- g_BLR_PayloadRequest_Thread Thread Started --") end
+      
+      -- wait for the screen to paint
+      WaitMsg("OnRender") -- wait for screen to open
+      while Dialogs.MarsPauseDlg and not Dialogs.PayloadRequest do
+        Sleep(100)
+      end -- while
+      
+      Sleep(100) -- give it chance to paint
+      
+      -- if we are in the dialog then start the watcher loop
+      if Dialogs.MarsPauseDlg and Dialogs.PayloadRequest then
+        local host = Dialogs.PayloadRequest  -- They forgot this
+        if lf_printd then print("-- Starting Watcher Loop --") end
+        local modEnabled = g_BLR_Options.modEnabled
+        -- run replacement loop when back on items screen only
+        while modEnabled and host.idContent do
+          if host.idContent.idToolBar.idrequest then
+            host.idContent.idToolBar.idrequest.action.OnAction = BLRonAction
+          end -- if mode
+          Sleep(100)
+        end -- while
+        
+      end -- if Dialogs
+      
+      enforceFilter = false
+      if lf_printd then print("-- g_BLR_PayloadRequest_Thread Thread Exited --") end
+    end) -- thread
+    
+
+    if self:AutoLoadCargoEnabled() then
+      CloseDialog("PayloadRequest")
+      CargoTransporter.OpenPayloadDialog(self, "PayloadPriority", self, {
+        meta_key = const.vkControl,
+        close_on_rmb = true
+      })
+    else
+      CloseDialog("PayloadPriority")
+      CargoTransporter.UIEditPayloadRequest(self)
+    end
+
+  end -- LanderRocketBase:UIEditPayloadRequest()
+
+  
+end -- OnMsg.ClassesBuilt()
+
 
 
 function OnMsg.ClassesGenerate()
@@ -261,6 +392,7 @@ function OnMsg.ClassesGenerate()
   	label = label or "Colonist"
   	local city = self.city or (Cities[self:GetMapID()]) or empty_table
   	local cityDomes = city and city.labels and city.labels.Dome or empty_table
+  	if lf_print then print(string.format("Found %d Domes to search", #cityDomes)) end
   	
   	-- added destination check to prevent forever stuck cycle
   	-- removed while loop since its just a single pass everytime.
@@ -269,30 +401,35 @@ function OnMsg.ClassesGenerate()
   		local sortedDomes = table.copy(cityDomes)
   		sort_obj = self
   		table.sort(sortedDomes, SortByDist)
+      if lf_print then print(string.format("Found %d sortedDomes to search", #sortedDomes)) end
   
   		-- grab colonists from closest domes
   		-- allColonists is all the colonists in the realm city of that specialty
   		local new_crew = {}
   		local allColonists = self.city.labels[label] and table.ifilter(self.city.labels[label], adultfilter) or empty_table
+  		if lf_print then print(string.format("Found %d Colonists matching filter", #allColonists)) end
+  		
   		local doloop = true -- used for breakout shortcircuit
-  		if #allColonists >= num_crew then
-  			for i = 1, #sortedDomes do
-  			  if not doloop then break end -- short circuit
-  				local dome = sortedDomes[i]
-  				local dome_colonists = dome.labels[label] and table.ifilter(dome.labels[label], adultfilter) or empty_table
-  				for _ = 1, #dome_colonists do
-  					if #new_crew < num_crew then
-  						local unit = table.rand(dome_colonists, InteractionRand("PickCrew"))
-  						table.remove_value(dome_colonists, unit)
-  						table.insert(new_crew, unit)
-  					else
-  					  if lf_print then print("Found enough crew type: ", label) end
-  					  doloop = false
-  						break
-  					end -- if #new_crew
-  				end -- for _
-  			end -- for i
-  		end -- if #allColonistssortedDomes
+
+  		if lf_print then print("Grabbing colonists") end
+  		for i = 1, #sortedDomes do
+  		  if not doloop then break end -- short circuit
+  			local dome = sortedDomes[i]
+  			local dome_colonists = dome.labels[label] and table.ifilter(dome.labels[label], adultfilter) or empty_table
+  			if lf_print then print(string.format("Found %d Colonists in %s Dome", #dome_colonists, dome.name or " ")) end
+  			for _ = 1, #dome_colonists do
+  				if #new_crew < num_crew then
+  					local unit = table.rand(dome_colonists, InteractionRand("PickCrew"))
+  					table.remove_value(dome_colonists, unit)
+  					table.insert(new_crew, unit)
+  				else
+  				  if lf_print then print("Found enough crew type: ", label) end
+  				  doloop = false
+  					break
+  				end -- if #new_crew
+  			end -- for _
+  		end -- for i
+
   
   		self.colonist_summon_fail = num_crew > #new_crew
   		ObjModified(self)
@@ -357,7 +494,7 @@ function OnMsg.ClassesGenerate()
     for specialization, count in pairs(manifest.passengers) do
       local new_crew = {}
       if IsKindOf(self, "LanderRocketBase") and count > 0 then
-        if lf_print then print("Find using BLRexpeditionGatherCrew function") end
+        if lf_print then print(string.format("Searching for %d %s", count, specialization)) end
         new_crew = self:BLRexpeditionGatherCrew(count, specialization, quick_load) or empty_table
       elseif count > 0 then
         if lf_print then print("Find using legacy ExpeditionGatherCrew function") end
@@ -473,7 +610,9 @@ function OnMsg.ToggleLFPrint(modname, lfvar)
 		if lfvar == "printdebug" then
 			 lf_printDebug = not lf_printDebug
 		elseif lfvar == "printc" then
-		  lf_printc = not lfprintc
+		  lf_printc = not lf_printc
+		elseif lfvar == "printd" then
+		  lf_printc = not lf_printd
 		else
 			lf_print = not lf_print
 		end -- if lfvar
