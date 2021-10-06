@@ -53,20 +53,26 @@ end -- BLRfindResourceIssues(rocket)
 
 
 -- function to find any cargo issues on the rocket when loading
+-- omit crew
 local function BLRfindCargoIssues(rocket)
+  local manifest = CreateManifest(rocket.cargo)
+  local crew     = manifest.passengers
   local cargo = rocket:BuildCargoInfo(rocket.cargo)
   local issues = {}
+  local cargofail = rocket.drone_summon_fail or rocket.rover_summon_fail or rocket.prefab_count_fail  --rocket.colonist_summon_fail
   if not rocket:GetCargoLoadingStatus() then
     for _, payload in pairs(cargo) do
-      if payload.requested > 0 and payload.requested > payload.amount then issues[#issues+1] = payload.class end
+      if payload.requested > 0 and (not crew[payload.class]) and payload.requested > payload.amount then issues[#issues+1] = payload.class end
     end -- for _,
+    if cargofail then return true, T{StringIdBase + 46, "Cargo missing"} end
     if #issues > 0 then return true, T{StringIdBase + 46, "Cargo Not Loaded"} end -- if #issues
   end -- not rocket:GetCargoLoadingStatus()
   if rocket:GetCargoLoadingStatus() == "loading" then return false, T{StringIdBase + 47, "Cargo requested"} end
   return false, T{StringIdBase + 48, "None"}
 end -- BLRfindCargoIssues(rocket)
 
-
+-- function to find any crew issues on the rocket when loading
+-- omit cargo, prefabs and rovers
 function BLRfindCrewIssues(rocket)
   local manifest = CreateManifest(rocket.cargo)
   local crew     = manifest.passengers
@@ -96,9 +102,9 @@ local function BLRgetStatusTexts(rocket)
   texts[4] = T{StringIdBase + 52, "Resource Issues:<right><issues>", issues = resourceIssueTxt or "*"}
   texts[5] = T{StringIdBase + 56, "Crew Issues:<right><issues>", issues = crewIssueTxt or "*"}
   
-  if cargoIssue and dest then texts[2] = T{StringIdBase + 53, "Launch Issues:<right>Cargo"} end -- if cargoIssue      
+  if cargoIssue and dest then texts[2] = T{StringIdBase + 53, "Launch Issues:<right>Cargo"} end    
   if crewIssue and dest then texts[2] = T{StringIdBase + 53, "Launch Issues:<right>Crew"} end
-  if cargoIssue and crewIssue and dest then texts[2] = T{StringIdBase + 53, "Launch Issues:<right>Cargo and Crew"} end 
+  --if cargoIssue and crewIssue and dest then texts[2] = T{StringIdBase + 53, "Launch Issues:<right>Cargo and Crew"} end 
   if resourceIssue then texts[2] = T{StringIdBase + 54, "Launch Issues:<right>Resources"} end
   
   return table.concat(texts, "<newline><left>")

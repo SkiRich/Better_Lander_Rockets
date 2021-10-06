@@ -1,12 +1,8 @@
 # Better Lander Rockets
 ## [v1.0] 10/04/21 12:55:47 AM
-#### Changed
-- added dummy text to status so it didnt look like it was unfolding
-- some text in mcr description
 
-#### Added
-- images and documentation
-- steam_id
+#### ToDo
+- Bring home all colonists from asteroids - no filter
 
 --------------------------------------------------------
 ## [v0.3] 10/04/21 5:04:20 PM
@@ -19,6 +15,7 @@
 - BLR_2Panels.lua and panel code
 - local LanderRocketCargoPreset as a copy of the preset incase the devs remove it or localize it
 - added loadout logic
+
 
 --------------------------------------------------------
 ## [v0.2] 10/01/21 6:34:24 PM

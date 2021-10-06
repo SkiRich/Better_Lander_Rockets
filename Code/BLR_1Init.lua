@@ -128,6 +128,7 @@ function OnMsg.ClassesBuilt()
     --if true then return Old_LanderRocketBase_UIEditPayloadRequest(self) end
     
     enforceFilter = true -- enforce filter in GetAvailableColonistsForCategory
+    self.prefab_count_fail = false -- reset this here since Find only runs when target set
     
     -- start realtime thread to watch for variables
     DeleteThread(g_BLR_PayloadRequest_Thread) -- just in case
@@ -355,7 +356,7 @@ function OnMsg.ClassesGenerate()
       ObjModified(self)
       return nil
     end -- if amount
-    self.rover_summon_fail = nil
+    self.rover_summon_fail = false
     ObjModified(self)
     local candidates = {}
     for _, unit in ipairs(list) do
@@ -562,9 +563,13 @@ function OnMsg.ClassesGenerate()
     for prefab, count in pairs(manifest_prefabs) do
       local available_count = self:ExpeditionGatherPrefabs(count, prefab)
       if not quick_load and count > available_count then
+        self.prefab_count_fail = true
+        if lf_print then print("-Counting prefabs failed-") end
         return false
       end
       table.insert(prefabs, {class = prefab, amount = count})
+      self.prefab_count_fail = false
+      if lf_print then print("-Counting prefabs success-") end
     end -- for prefab
     
     return true, rovers, drones, crew, prefabs
