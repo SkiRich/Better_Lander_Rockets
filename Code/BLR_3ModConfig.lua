@@ -3,12 +3,14 @@
 -- All rights reserved, duplication and modification prohibited.
 -- You may not copy it, package it, or claim it as your own.
 -- Created Sept 30th, 2021
+-- Updated Oct 4th, 2021
 
 local lf_print = false -- Setup debug printing in local file
                        -- Use if lf_print then print("something") end
 
-local StringIdBase = 17764703910 -- Better Lander Rockets    : 703910 - 703919 ** 
+local StringIdBase = 17764706000 -- Better Lander Rockets    : 706000 - 706099  This File Start 0-29, Next: 6
 local mod_name = "Better Lander Rockets"
+local steam_id = "2619013940"
 local TableFind  = table.find
 local ModConfig_id        = "1542863522"
 local ModConfigWaitThread = false
@@ -35,7 +37,8 @@ local function WaitForModConfig()
       if lf_print then print(string.format("%s WaitForModConfig Thread Continuing", mod_name)) end
 
       if ModConfigLoaded and ModConfig:IsReady() then
-        g_BLR_Options.modEnabled = ModConfig:Get("Better_Lander", "modEnabled")
+        g_BLR_Options.modEnabled    = ModConfig:Get("Better_Lander", "modEnabled")
+        g_BLR_Options.rocketOptions = ModConfig:Get("Better_Lander", "rocketOptions")
 
     	  ModLog(string.format("%s detected ModConfig running - Setup Complete", mod_name))
       else
@@ -59,14 +62,22 @@ function OnMsg.ModConfigReady()
        T{StringIdBase + 1, "Options for Better Lander Rockets"} -- Optional description
     )
 
-    -- g_FW_options.modEnabled
+    -- g_BLR_Options.modEnabled
     ModConfig:RegisterOption("Better_Lander", "modEnabled", {
-        -- Texts can include images or other formatting
         name = T{StringIdBase + 2, "Enable Better Lander Rockets Mod"},
-        desc = T{StringIdBase + 3, "Enable mod or disable all functions and return to game original code."},
+        desc = T{StringIdBase + 3, "Enable mod or disable all functions and fixes and return to game original code."},
         type = "boolean",
         default = true,
         order = 1
+    })
+    
+    -- g_BLR_Options.rocketOptions
+    ModConfig:RegisterOption("Better_Lander", "rocketOptions", {
+        name = T{StringIdBase + 4, "Rocket options:"},
+        desc = T{StringIdBase + 5, "Enable or disable individual rocket options such as Loadout keep all fixes"},
+        type = "boolean",
+        default = true,
+        order = 2
     })
 
 end -- OnMsg.ModConfigReady()
@@ -80,6 +91,11 @@ function OnMsg.ModConfigChanged(mod_id, option_id, value, old_value, token)
         g_BLR_Options.modEnabled = value
       end -- g_BLR_Options.modEnabled
       
+      -- g_BLR_Options.rocketOptions
+      if option_id == "rocketOptions" then
+        g_BLR_Options.rocketOptions = value
+      end -- g_BLR_Options.rocketOptions      
+      
     end -- if ModConfigLoaded
 end --OnMsg.ModConfigChanged
 
@@ -92,3 +108,31 @@ end -- OnMsg.CityStart()
 function OnMsg.LoadGame()
   WaitForModConfig()
 end -- OnMsg.LoadGame()
+
+
+local function SRDailyPopup()
+    CreateRealTimeThread(function()
+        local params = {
+              title = "Non-Author Mod Copy",
+               text = "We have detected an illegal copy version of : ".. mod_name .. ". Please uninstall the existing version.",
+            choice1 = "Download the Original [Opens in new window]",
+            choice2 = "Damn you copycats!",
+            choice3 = "I don't care...",
+              image = "UI/Messages/death.tga",
+              start_minimized = false,
+        } -- params
+        local choice = WaitPopupNotification(false, params)
+        if choice == 1 then
+          OpenUrl("https://steamcommunity.com/sharedfiles/filedetails/?id=" .. steam_id, true)
+        end -- if statement
+    end ) -- CreateRealTimeThread
+end -- function end
+
+
+function OnMsg.NewDay(day)
+  if table.find(ModsLoaded, "steam_id", steam_id)~= nil then
+    --nothing
+  else
+    SRDailyPopup()
+  end -- SRDailyPopup
+end --OnMsg.NewDay(day)
