@@ -57,6 +57,7 @@ end -- adultfilter
 
 -- OnAction function replacement since the original xTemplate version is busted
 -- replaced by function LanderRocketBase:UIEditPayloadRequest() below
+-- from PayloadRequest.lua
 local BLRonAction = function(self, host, source)
   local obj = host.parent.context.object
   local cargo = obj.cargo
@@ -82,7 +83,7 @@ local BLRonAction = function(self, host, source)
     local target_spot = obj.target_spot or obj.requested_spot -- fixed
     if requested_cargo == 0 and requested_passengers == 0 then
       res = WaitPopupNotification("LaunchIssue_CargoEmpty", {}, false, terminal.desktop)
-    elseif obj.requested_spot and requested_passengers > 0 then
+    elseif obj.requested_spot and (requested_passengers > 0) and (not ObjectIsInEnvironment(obj, "Asteroid"))then
       if not obj.requested_spot.asteroid.available then
         res = WaitPopupNotification("LaunchIssue_AsteroidHabitat", {
           number1 = requested_passengers,
@@ -108,19 +109,13 @@ end -- OnAction function replacement BLRonAction
 function OnMsg.ClassesBuilt()
   
   
-  local Old_TraitsObject_GetAvailableColonistsForCategory = TraitsObjectGetAvailableColonistsForCategory
+  local Old_TraitsObject_GetAvailableColonistsForCategory = TraitsObject.GetAvailableColonistsForCategory
   function TraitsObject:GetAvailableColonistsForCategory(city, category)
     if not g_BLR_Options.modEnabled and (not enforceFilter) then return Old_TraitsObject_GetAvailableColonistsForCategory(self, city, category) end -- short circuit
     city = city or UICity 
     category = category or "Colonist"
     local filteredColonists = city.labels[category] and table.ifilter(city.labels[category], adultfilter) or empty_table
-    if lf_print then print(string.format("---- Filter found %d %s", #filteredColonists, category)) end
-    --local available = #filteredColonists
-    --for _, colonist in ipairs(city.labels.Colonist or empty_table) do
-    --  if colonist.traits[category] and (category ~= "Tourist" and not colonist.traits.Tourist or category == "Tourist" and colonist.traits.Tourist) then
-    --    available = available + 1
-    --  end
-    --end
+    -- Chatty if lf_print then print(string.format("---- Filter found %d %s", #filteredColonists, category)) end
     return #filteredColonists or 0
   end -- TraitsObject:GetAvailableColonistsForCategory(city, category)
 
@@ -154,9 +149,10 @@ function OnMsg.ClassesBuilt()
         local modEnabled = g_BLR_Options.modEnabled
         -- run replacement loop when back on items screen only
         while modEnabled and host.idContent do
-          if host.idContent.idToolBar.idrequest then
-            host.idContent.idToolBar.idrequest.action.OnAction = BLRonAction
-          end -- if mode
+          -- devs removed offending code so no need to replace this.  Not used but keeping loop for enforceFilter
+          -- if host.idContent.idToolBar.idrequest then
+          -- host.idContent.idToolBar.idrequest.action.OnAction = BLRonAction
+          --end -- if mode
           Sleep(100)
         end -- while
         
@@ -409,11 +405,11 @@ function OnMsg.ClassesGenerate()
   		local allColonists = self.city.labels[label] and table.ifilter(self.city.labels[label], adultfilter) or empty_table
   		if lf_print then print(string.format("Found %d Colonists matching filter", #allColonists)) end
   		
-  		local doloop = true -- used for breakout shortcircuit
+  		--local doloop = true -- used for breakout shortcircuit
 
   		if lf_print then print("Grabbing colonists") end
   		for i = 1, #sortedDomes do
-  		  if not doloop then break end -- short circuit
+  		  --if not doloop then break end -- short circuit
   			local dome = sortedDomes[i]
   			local dome_colonists = dome.labels[label] and table.ifilter(dome.labels[label], adultfilter) or empty_table
   			if lf_print then print(string.format("Found %d Colonists in %s Dome", #dome_colonists, dome.name or " ")) end
@@ -424,7 +420,7 @@ function OnMsg.ClassesGenerate()
   					table.insert(new_crew, unit)
   				else
   				  if lf_print then print("Found enough crew type: ", label) end
-  				  doloop = false
+  				  --doloop = false
   					break
   				end -- if #new_crew
   			end -- for _
@@ -447,6 +443,59 @@ function OnMsg.ClassesGenerate()
   	end -- if self:HasDestination()
   	return {} -- return nothing since we have no destination - just in case
   end -- CargoTransporter:BLRexpeditionGatherCrew(num_crew, label, quick_load)
+
+
+  -- rewrite from CargoTransporter.lua
+  -- used to add some code to stop the forever while loop when a rocket launch is cancelled
+  local Old_CargoTransporter_Load = CargoTransporter.Load
+  function CargoTransporter:Load(manifest, quick_load)
+    if not g_BLR_Options.modEnabled then return Old_CargoTransporter_Load(self, manifest, quick_load) end -- short circuit
+    if lf_print then print("CargoTransporter:Find running") end
+    
+    self.boarding = {}
+    self.departures = {}
+    self.cargo = self.cargo or {}
+    local SetCargoAmount = function(cargo, class_id, amount)
+      if not cargo[class_id] then
+        cargo[class_id] = {
+          class = class_id,
+          requested = 0,
+          amount = 0
+        }
+      end
+      cargo[class_id].amount = cargo[class_id].amount + amount
+    end
+    local succeed, rovers, drones, crew, prefabs = self:Find(manifest, quick_load)
+    while not succeed and self:HasDestination() do  -- forever loop now canceled when destination is cancelled
+      Sleep(1000)
+      succeed, rovers, drones, crew, prefabs = self:Find(manifest, quick_load)
+    end -- while
+    
+    -- need to have empty_table here in case of cancellation
+    rovers = rovers or empty_table
+    drones = drones or empty_table
+    crew = crew or empty_table
+    prefabs = prefabs or empty_table
+    for _, rover in pairs(rovers) do
+      self:ExpeditionLoadRover(rover)
+      SetCargoAmount(self.cargo, rover.class, 1)
+    end -- for _
+    self:ExpeditionLoadDrones(drones, quick_load)
+    SetCargoAmount(self.cargo, "Drone", #drones)
+    self:ExpeditionLoadCrew(crew)
+    for _, member in pairs(crew) do
+      if member.traits.Tourist then
+        SetCargoAmount(self.cargo, "Tourist", 1)
+      else
+        SetCargoAmount(self.cargo, member.specialist, 1)
+      end
+    end -- for _
+    for _, prefab in pairs(prefabs) do
+      SetCargoAmount(self.cargo, prefab.class, prefab.amount)
+      self.city:AddPrefabs(prefab.class, -prefab.amount, false)
+    end -- for _
+    return rovers, drones, crew, prefabs
+  end -- CargoTransporter:Load(manifest, quick_load)
 
 
 
@@ -479,10 +528,10 @@ function OnMsg.ClassesGenerate()
       
       if IsKindOf(self, "LanderRocketBase") then
         if lf_print then print("Find using BLRExpeditionFindDrones function") end
-        drones = self:BLRexpeditionFindDrones(manifest.drones, quick_load)
+        drones = self:BLRexpeditionFindDrones(manifest.drones, quick_load) or empty_table
       else
         if lf_print then print("Find using legacy ExpeditionFindDrones function") end
-        drones = self:ExpeditionFindDrones(manifest.drones, quick_load)
+        drones = self:ExpeditionFindDrones(manifest.drones, quick_load) or empty_table
       end -- if IsKindOf
       
       if not quick_load and #drones < manifest.drones then

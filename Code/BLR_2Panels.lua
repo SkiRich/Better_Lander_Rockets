@@ -9,7 +9,7 @@ local lf_printc       = false  -- print for classes that are chatty
 local lf_printDebug   = false
 
 
-local StringIdBase = 17764706000 -- Better Lander Rockets    : 706000 - 706099  This File Start 40-89, Next: 56
+local StringIdBase = 17764706000 -- Better Lander Rockets    : 706000 - 706099  This File Start 40-89, Next: 57
 local ModDir   = CurrentModPath
 local mod_name = "Better Lander Rockets"
 local iconBLRSection  = ModDir.."UI/Icons/BLRSection.png"
@@ -47,7 +47,7 @@ local function BLRfindResourceIssues(rocket)
       issues[#issues+1] = payload.class 
     end -- if payload.requested > 0
   end -- for _, payload 
-  if #issues > 0 then return true, T{StringIdBase + 44, "Resources missing"} end
+  if #issues > 0 then return true, T{StringIdBase + 44, "Not Enough"} end
   return false, T{StringIdBase + 45, "None"}
 end -- BLRfindResourceIssues(rocket)
 
@@ -62,23 +62,44 @@ local function BLRfindCargoIssues(rocket)
     end -- for _,
     if #issues > 0 then return true, T{StringIdBase + 46, "Cargo Not Loaded"} end -- if #issues
   end -- not rocket:GetCargoLoadingStatus()
-  if rocket:GetCargoLoadingStatus() == "loading" then return false, T{StringIdBase + 47, "Cargo still loading"} end
+  if rocket:GetCargoLoadingStatus() == "loading" then return false, T{StringIdBase + 47, "Cargo requested"} end
   return false, T{StringIdBase + 48, "None"}
 end -- BLRfindCargoIssues(rocket)
 
 
+function BLRfindCrewIssues(rocket)
+  local manifest = CreateManifest(rocket.cargo)
+  local crew     = manifest.passengers
+  local cargo    = rocket:BuildCargoInfo(rocket.cargo)
+  local issues = {}
+  if not rocket:GetCargoLoadingStatus() then
+    for _, payload in pairs(cargo) do
+      if payload.requested > 0 and crew[payload.class] and payload.requested > payload.amount then issues[#issues+1] = payload.class end
+    end -- for _,
+    if #issues > 0 then return true, T{StringIdBase + 46, "Crew missing"} end -- if #issues
+  end -- not rocket:GetCargoLoadingStatus() 
+  if rocket:GetCargoLoadingStatus() == "loading" then return false, T{StringIdBase + 47, "Crew requested"} end
+  return false, T{StringIdBase + 48, "None"}
+end -- BLRfindCrewIssues(rocket) 
+
+
 -- status texts for infopanel section
-function BLRgetStatusTexts(rocket)
+local function BLRgetStatusTexts(rocket)
+  local dest = rocket.target_spot or rocket.requested_spot
   local texts = {}
-  local cargoIssue, cargoIssueTxt = BLRfindCargoIssues(rocket)
+  local cargoIssue, cargoIssueTxt       = BLRfindCargoIssues(rocket)
   local resourceIssue, resourceIssueTxt = BLRfindResourceIssues(rocket)
+  local crewIssue, crewIssueTxt         = BLRfindCrewIssues(rocket)
   texts[1] = T{StringIdBase + 49, "Loadout:<right><loadout>", loadout = rocket.BLR_loadout or "*"}
   texts[2] = T{StringIdBase + 50, "Launch Issues:<right><issues>", issues = rocket:GetLaunchIssue() or "None"}
   texts[3] = T{StringIdBase + 51, "Cargo Issues:<right><issues>", issues = cargoIssueTxt or "*"}
   texts[4] = T{StringIdBase + 52, "Resource Issues:<right><issues>", issues = resourceIssueTxt or "*"}
+  texts[5] = T{StringIdBase + 56, "Crew Issues:<right><issues>", issues = crewIssueTxt or "*"}
   
-  if cargoIssue then texts[2] = T{StringIdBase + 53, "Launch Issues:<right>Cargo"} end        
-  if resourceIssue then texts[2] = T{StringIdBase + 54, "Launch Issues:<right>Resources"} end  
+  if cargoIssue and dest then texts[2] = T{StringIdBase + 53, "Launch Issues:<right>Cargo"} end -- if cargoIssue      
+  if crewIssue and dest then texts[2] = T{StringIdBase + 53, "Launch Issues:<right>Crew"} end
+  if cargoIssue and crewIssue and dest then texts[2] = T{StringIdBase + 53, "Launch Issues:<right>Cargo and Crew"} end 
+  if resourceIssue then texts[2] = T{StringIdBase + 54, "Launch Issues:<right>Resources"} end
   
   return table.concat(texts, "<newline><left>")
 end -- BLRGetStatusTexts(rocket)
@@ -90,7 +111,7 @@ function OnMsg.ClassesBuilt()
   local ObjModified = ObjModified
   local PlaceObj = PlaceObj
   local BLRSectionID1 = "BLRSection-01"
-  local BLRControlVer = "100.1"
+  local BLRControlVer = "100.2"
   local XT
 
   if lf_print then print("Loading Classes in BLR_2Panels.lua") end  
@@ -172,7 +193,7 @@ function OnMsg.ClassesBuilt()
               "__template", "InfopanelText",
               "Id", "idBLRstatusText",
               "Margins", box(0, 0, 0, 0),
-              "Text", T{StringIdBase + 55, "Loadout:<newline>Launch Issues:<newline>Cargo Issues:<newline>Resource Issues:"},
+              "Text", T{StringIdBase + 55, "Loadout:<newline>Launch Issues:<newline>Cargo Issues:<newline>Resource Issues:<newline>Crew Issues:"},
               "OnContextUpdate", function(self, context)
                 self:SetText(BLRgetStatusTexts(context))
               end, -- OnContextUpdate
