@@ -109,6 +109,7 @@ end -- OnAction function replacement BLRonAction
 function OnMsg.ClassesBuilt()
   
   
+  -- need to add qualifiers to this function
   local Old_TraitsObject_GetAvailableColonistsForCategory = TraitsObject.GetAvailableColonistsForCategory
   function TraitsObject:GetAvailableColonistsForCategory(city, category)
     if not g_BLR_Options.modEnabled and (not enforceFilter) then return Old_TraitsObject_GetAvailableColonistsForCategory(self, city, category) end -- short circuit
@@ -125,9 +126,9 @@ function OnMsg.ClassesBuilt()
   function LanderRocketBase:UIEditPayloadRequest()
     if not g_BLR_Options.modEnabled then return Old_LanderRocketBase_UIEditPayloadRequest(self) end -- short circuit
     if lf_printd then print("-- g_BLR_PayloadRequest_Thread Function started --") end
-    --if true then return Old_LanderRocketBase_UIEditPayloadRequest(self) end
     
-    enforceFilter = true -- enforce filter in GetAvailableColonistsForCategory
+    
+    enforceFilter = not ObjectIsInEnvironment(self, "Asteroid") -- enforce filter on Mars only in GetAvailableColonistsForCategory
     self.prefab_count_fail = false -- reset this here since Find only runs when target set
     
     -- start realtime thread to watch for variables
@@ -183,6 +184,31 @@ end -- OnMsg.ClassesBuilt()
 
 
 function OnMsg.ClassesGenerate()
+
+  
+  -- new function to correct cargo amount when lander lands on asteroid
+  -- did not exist
+  function LanderRocketBase:WaitToFinishDisembarking(crew)
+    if not g_BLR_Options.modEnabled then return CargoTransporter.WaitToFinishDisembarking(self, crew) end
+    
+    -- create a gametime thread to allow for the rest of the cargo to get unloaded without waiting for crew
+    if IsValidThread(self.BLR_CrewUnloadThread) then DeleteThread(self.BLR_CrewUnloadThread) end -- just in case
+    self.BLR_CrewUnloadThread = CreateGameTimeThread(function(rocket)
+      local crew = rocket.crew or empty_table -- use the rocket var not the passed var
+      while #crew > 0 do
+        for _, unit in ipairs(crew) do
+          if unit.command ~= "ReturnFromExpedition" then
+            table.remove_value(crew, unit)
+            rocket.cargo[unit.specialist].amount = rocket.cargo[unit.specialist].amount - 1
+            rocket.cargo[unit.specialist].requested = 0
+            if rocket.cargo[unit.specialist].amount < 0 then rocket.cargo[unit.specialist].amount = 0 end -- math, you know
+          end -- if
+        end -- for
+        Sleep(200) -- we dont need to wait so long, there is no animation here to really wait for
+      end -- while
+    end, self) -- thread
+  end -- LanderRocketBase:WaitToFinishDisembarking(crew)
+
 
   -- from DroneBase
   -- This use to be DroneBase:CanBeControlled()  but they hosed that with a duplicate function of the same name
@@ -387,6 +413,7 @@ function OnMsg.ClassesGenerate()
   	-- instead of going through UICity.label, we'll go through each dome in order of distance to rocket
   	-- modified for multi realm
   	label = label or "Colonist"
+  	local filterToUse = (ObjectIsInEnvironment(self, "Asteroid") and true) or adultfilter
   	local city = self.city or (Cities[self:GetMapID()]) or empty_table
   	local cityDomes = city and city.labels and city.labels.Dome or empty_table
   	if lf_print then print(string.format("Found %d Domes to search", #cityDomes)) end
@@ -403,16 +430,13 @@ function OnMsg.ClassesGenerate()
   		-- grab colonists from closest domes
   		-- allColonists is all the colonists in the realm city of that specialty
   		local new_crew = {}
-  		local allColonists = self.city.labels[label] and table.ifilter(self.city.labels[label], adultfilter) or empty_table
+  		local allColonists = lf_print and self.city.labels[label] and table.ifilter(self.city.labels[label], filterToUse) or empty_table
   		if lf_print then print(string.format("Found %d Colonists matching filter", #allColonists)) end
-  		
-  		--local doloop = true -- used for breakout shortcircuit
 
   		if lf_print then print("Grabbing colonists") end
   		for i = 1, #sortedDomes do
-  		  --if not doloop then break end -- short circuit
   			local dome = sortedDomes[i]
-  			local dome_colonists = dome.labels[label] and table.ifilter(dome.labels[label], adultfilter) or empty_table
+  			local dome_colonists = dome.labels[label] and table.ifilter(dome.labels[label], filterToUse) or empty_table
   			if lf_print then print(string.format("Found %d Colonists in %s Dome", #dome_colonists, dome.name or " ")) end
   			for _ = 1, #dome_colonists do
   				if #new_crew < num_crew then
@@ -421,7 +445,6 @@ function OnMsg.ClassesGenerate()
   					table.insert(new_crew, unit)
   				else
   				  if lf_print then print("Found enough crew type: ", label) end
-  				  --doloop = false
   					break
   				end -- if #new_crew
   			end -- for _
