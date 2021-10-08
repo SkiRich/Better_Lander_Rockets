@@ -28,7 +28,7 @@ local function BLRsetRollOverText()
   local texts = {}
   texts[1] = T{StringIdBase + 40, "Loadout is the default cargo request when landing on Mars."}
   texts[2] = T{StringIdBase + 41, "Launch issues shows whats holding up a launch."}
-  texts[3] = T{StringIdBase + 42, "Cargo issues are problems wth requested cargo."}
+  texts[3] = T{StringIdBase + 42, "Cargo issues are problems wth requested cargo.<newline>Drones rovers and prefabs are considered cargo."}
   texts[4] = T{StringIdBase + 43, "Resource issues are problems with resources on the planet or asteroid."}
 
   return table.concat(texts, "<newline><left>")
@@ -55,6 +55,7 @@ end -- BLRfindResourceIssues(rocket)
 -- function to find any cargo issues on the rocket when loading
 -- omit crew
 local function BLRfindCargoIssues(rocket)
+  local dest = rocket.target_spot or rocket.requested_spot
   local manifest = CreateManifest(rocket.cargo)
   local crew     = manifest.passengers
   local cargo = rocket:BuildCargoInfo(rocket.cargo)
@@ -64,12 +65,47 @@ local function BLRfindCargoIssues(rocket)
     for _, payload in pairs(cargo) do
       if payload.requested > 0 and (not crew[payload.class]) and payload.requested > payload.amount then issues[#issues+1] = payload.class end
     end -- for _,
-    if cargofail then return true, T{StringIdBase + 46, "Cargo missing"} end
+    if dest and cargofail then return true, T{StringIdBase + 46, "Cargo missing"} end
     if #issues > 0 then return true, T{StringIdBase + 47, "Cargo Not Loaded"} end -- if #issues
   end -- not rocket:GetCargoLoadingStatus()
   if rocket:GetCargoLoadingStatus() == "loading" then return false, T{StringIdBase + 48, "Cargo requested"} end
   return false, T{StringIdBase + 49, "None"}
 end -- BLRfindCargoIssues(rocket)
+
+-- function to find any drone issues on the rocket when loading
+local function BLRfindDroneIssues(rocket)
+  local dest = rocket.target_spot or rocket.requested_spot
+  local manifest = CreateManifest(rocket.cargo)
+  local crew     = manifest.passengers
+  local cargo = rocket:BuildCargoInfo(rocket.cargo)
+  local issues = {}
+  local dronefail = rocket.drone_summon_fail
+  
+  if not rocket:GetCargoLoadingStatus() then
+    for _, payload in pairs(cargo) do
+      if payload.class == "Drone" and payload.requested > 0 and payload.requested > payload.amount then issues[#issues+1] = payload end
+    end -- for _,
+    
+    -- only report if a destination set
+    if dest and dronefail and #issues > 0 then 
+      -- check if on an asteroid and asking for more drones than attached
+      local dronesAttached = #rocket.drones or 0
+      if dronefail and issues[1].class and issues[1].requested > dronesAttached then 
+        return T{StringIdBase + 46, "Not enough drones"}
+      elseif dronefail and issues[1].class and rocket.drones and issues[1].requested <= dronesAttached then
+        -- find out whats going on with the drones
+        for _, drone in ipairs(rocket.drones or empty_table) do
+          if drone.command == "Charge" or drone.command == "EmergencyPower" then return T{StringIdBase + 46, "Drones recharging"} end
+          if table.find(rocket.drones_entering, drone) or table.find(rocket.drones_exiting, drone) then return T{StringIdBase + 46, "Drones busy"} end
+        end -- for _, drone
+      end -- if dronefail and issues.class
+      return T{StringIdBase + 46, "Drones unavailable"}
+    end -- if dronefail and #issues > 0
+  end -- not rocket:GetCargoLoadingStatus()
+
+  if rocket:GetCargoLoadingStatus() == "loading" then return T{StringIdBase + 48, "Drones requested"} end
+  return T{StringIdBase + 49, "None"}
+end -- BLRfindDroneIssues(rocket)
 
 -- function to find any crew issues on the rocket when loading
 -- omit cargo, prefabs and rovers
@@ -92,13 +128,15 @@ local function BLRgetStatusTexts(rocket)
   local dest = rocket.target_spot or rocket.requested_spot
   local texts = {}
   local cargoIssue, cargoIssueTxt       = BLRfindCargoIssues(rocket)
+  local droneIssueTxt                   = BLRfindDroneIssues(rocket)
   local resourceIssue, resourceIssueTxt = BLRfindResourceIssues(rocket)
   local crewIssue, crewIssueTxt         = BLRfindCrewIssues(rocket)
   texts[1] = T{StringIdBase + 52, "Loadout:<right><loadout>", loadout = rocket.BLR_loadout or "*"}
   texts[2] = T{StringIdBase + 53, "Launch Issues:<right><issues>", issues = rocket:GetLaunchIssue() or "None"}
   texts[3] = T{StringIdBase + 54, "Cargo Issues:<right><issues>", issues = cargoIssueTxt or "*"}
-  texts[4] = T{StringIdBase + 55, "Resource Issues:<right><issues>", issues = resourceIssueTxt or "*"}
-  texts[5] = T{StringIdBase + 56, "Crew Issues:<right><issues>", issues = crewIssueTxt or "*"}
+  texts[4] = T{StringIdBase + 54, "Drone Issues:<right><issues>", issues = droneIssueTxt or "*"}
+  texts[5] = T{StringIdBase + 55, "Resource Issues:<right><issues>", issues = resourceIssueTxt or "*"}
+  texts[6] = T{StringIdBase + 56, "Crew Issues:<right><issues>", issues = crewIssueTxt or "*"}
   
   if cargoIssue and dest then texts[2] = T{StringIdBase + 57, "Launch Issues:<right>Cargo"} end    
   if crewIssue and dest then texts[2] = T{StringIdBase + 58, "Launch Issues:<right>Crew"} end
@@ -197,7 +235,7 @@ function OnMsg.ClassesBuilt()
               "__template", "InfopanelText",
               "Id", "idBLRstatusText",
               "Margins", box(0, 0, 0, 0),
-              "Text", T{StringIdBase + 63, "Loadout:<newline>Launch Issues:<newline>Cargo Issues:<newline>Resource Issues:<newline>Crew Issues:"},
+              "Text", T{StringIdBase + 63, "Loadout:<newline>Launch Issues:<newline>Cargo Issues:<newline>Drone Issues:<newline>Resource Issues:<newline>Crew Issues:"},
               "OnContextUpdate", function(self, context)
                 self:SetText(BLRgetStatusTexts(context))
               end, -- OnContextUpdate

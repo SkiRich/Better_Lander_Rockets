@@ -11,31 +11,31 @@ local lf_printDebug   = false
 
 local mod_name = "Better Lander Rockets"
 local table = table
-local ObjModified = ObjModified
-local Sleep = Sleep
+local IsValidPos  = CObject.IsValidPos
 
 local StringIdBase  = 17764706000 -- Better Lander Rockets    : 706000 - 706099  This File Start 90-99, Next: 90
 local enforceFilter = false -- enforce filtering in GetAvailableColonistsForCategory 
 
 -- options for Better Lander Rockets Mod
 g_BLR_Options = {
-  modEnabled    = true,
-  rocketOptions = true,
+  modEnabled         = true,
+  rocketOptions      = true,
+  asteroidExtendTime = 2
 }
 
-g_BLR_PayloadRequest_Thread = false -- thread holder for dialog repaint
+g_BLR_PayloadRequest_Thread = false -- thread holder for dialog render
 
 
 -- copy of local function from ResourceOverview.lua
 -- changed the math so we drop remainders instead of rounding up.
 -- rounding up here causes inventory to be wrong when loading rockets
 -- so we drop remainders
-local function RoundResourceAmount(r)
+local function RoundDownResourceAmount(r)
   r = r or 0
   r = r / const.ResourceScale
   r = (r - (r % 1)) * const.ResourceScale
   return r
-end -- function RoundResourceAmount(r)
+end -- function RoundDownResourceAmount(r)
 
 -- needed for CargoTransporter:BLRexpeditionFindDrones and ExpeditionGatherCrew
 local sort_obj
@@ -43,9 +43,9 @@ local function SortByDist(a, b)
 	return a:GetVisualDist2D(sort_obj) < b:GetVisualDist2D(sort_obj)
 end -- SortByDist
 
--- used in ExpeditionLoadDrones and ExpeditionFindDrones
+-- used in ExpeditionLoadDrones and BLRExpeditionFindDrones
 local dronefilter = function(drone)
-  return drone:CanBeControlled() and (not drone.holder)
+  return drone:CanBeControlled() and (not drone.holder) and IsValid(drone) and IsValidPos(drone) -- dont take drones inside a rocket
 end -- dronefilter
 
 -- used in ExpeditionGatherCrew
@@ -105,17 +105,96 @@ local BLRonAction = function(self, host, source)
   CloseDialog("PayloadRequest")
 end -- OnAction function replacement BLRonAction
 
+-- extend asteroid linger time
+local function BLRextendAsteroidTime(rocket)
+  if IsKindOf(rocket, "LanderRocketBase") and ObjectIsInEnvironment(rocket, "Asteroid") then 
+    local map_id = rocket.city.map_id or ""
+    local asteroids = UIColony.asteroids or empty_table
+    for i = 1, #asteroids do
+      local asteroid = asteroids[i]
+      if (asteroid.map == map_id) and (not asteroid.BLR_extendedTime) then
+        local sols = g_BLR_Options.asteroidExtendTime * const.Scale.sols
+        asteroid.end_time = asteroid.end_time + sols
+        if map_id == ActiveMapID then
+          local asteroid_timer_params = {
+            start_time = asteroid.start_time,
+            end_time = asteroid.end_time,
+            expiration = asteroid.end_time - asteroid.start_time,
+            rollover_title = asteroid.title,
+            rollover_text = asteroid.description,
+            title = asteroid.title
+          }
+          AddOnScreenNotification("AsteroidTimer", nil, asteroid_timer_params, nil)
+        end -- if map_id
+        asteroid.BLR_extendedTime = true
+      end -- if asteroids
+    end -- for i
+  end -- if IsKindOf
+end -- BLRextendAsteroidTime(rocket)
+
+
+-- fixup broken landed rockets
+local function BLRfixLanderRockets()
+  if not g_BLR_Options.modEnabled then return end -- shortcircuit
+  local rockets = UIColony.city_labels.labels.LanderRocketBase or empty_table
+  
+  -- fix for stuck cargo crew
+  for _, rocket in ipairs(rockets) do
+    if rocket:IsRocketLanded() and rocket.crew and (#rocket.crew == 0) then
+      local manifest = CreateManifest(rocket.cargo or empty_table)
+      local crew     = manifest.passengers or empty_table
+      for _, payload in pairs(rocket.cargo or empty_table) do
+        if crew[payload.class] and payload.amount > 0 and payload.requested == 0 then payload.amount = 0 end -- zero out passenger cargo
+      end -- for _,      
+    end -- if rocket:IsRocketLanded()
+  end -- for _, rocket
+  
+  -- extend time for asteroids with rockets on them that didnt get the extension
+  for _, rocket in ipairs(rockets) do
+    if rocket:IsLandedOnAsteroid() then BLRextendAsteroidTime(rocket) end
+  end -- for _,
+  
+end -- function BLRfixLanderRockets()
+
+
+-- empty any resources from the stockpile on the rover
+local function BLRemptyStockpile(rover)
+  local stock = rover.stockpiled_amount or empty_table
+  for res, amount in pairs(stock) do
+    if amount > 0 then rover:AddResource(-amount, res) end
+  end -- for res
+end -- BLRemptyStockpile(rover)
+
+
+  
+-- holy shit this returns false when on an asteroid
+--local Old_IsUnitInDome = IsUnitInDome
+--function IsUnitInDome(unit)
+--  if (not g_BLR_Options.modEnabled) or (not ObjectIsInEnvironment(unit, "Asteroid")) then return Old_IsUnitInDome(unit) end
+--  if unit.holder then
+--    return IsObjInDome(unit.holder)
+--  else
+--    local object_hex_grid = GetObjectHexGrid(unit)
+--    local result = IsValidPos(unit) and GetDomeAtPoint(object_hex_grid, GetTopmostParent(unit))
+--    if not result then return FindNearestObject(unit.city.labels.Community, unit) end
+--    return result
+--  end -- if (not g_BLR_Options.modEnabled)
+--end -- IsUnitInDome(unit)
+  
+
+
 ------------------------------------------- OnMsgs --------------------------------------------------
 function OnMsg.ClassesBuilt()
-  
+
   
   -- need to add qualifiers to this function
   local Old_TraitsObject_GetAvailableColonistsForCategory = TraitsObject.GetAvailableColonistsForCategory
   function TraitsObject:GetAvailableColonistsForCategory(city, category)
-    if not g_BLR_Options.modEnabled and (not enforceFilter) then return Old_TraitsObject_GetAvailableColonistsForCategory(self, city, category) end -- short circuit
+    if not g_BLR_Options.modEnabled then return Old_TraitsObject_GetAvailableColonistsForCategory(self, city, category) end -- short circuit
     city = city or UICity 
     category = category or "Colonist"
-    local filteredColonists = city.labels[category] and table.ifilter(city.labels[category], adultfilter) or empty_table
+    local filterToUse = (not enforceFilter and true) or adultfilter
+    local filteredColonists = city.labels[category] and table.ifilter(city.labels[category], filterToUse) or empty_table
     -- Chatty if lf_print then print(string.format("---- Filter found %d %s", #filteredColonists, category)) end
     return #filteredColonists or 0
   end -- TraitsObject:GetAvailableColonistsForCategory(city, category)
@@ -181,10 +260,29 @@ function OnMsg.ClassesBuilt()
   
 end -- OnMsg.ClassesBuilt()
 
-
+-----------------------------------------------------------------------------------------------------
 
 function OnMsg.ClassesGenerate()
+  
+  -- new function to prevent CTD and lockup when colonists are on mars
+  -- yeah they try to call a shuttle.  duh.
+  function MicroGHabitat:GetNearestLandingSlot(ref_pos, ...)
+    return nil, nil
+  end -- MicroGHabitat:GetNearestLandingSlot(ref_pos, ...)
+  
+  
+  -- need to re-write this.  Causing a crash when colonist calls it when on an asteroid
+--  local Old_Colonist_TryToEmigrate = Colonist.TryToEmigrate
+--  function Colonist:TryToEmigrate(current_dome)
+--    if (not g_BLR_Options.modEnabled) or (not ObjectIsInEnvironment(self, "Asteroid")) then return Old_Colonist_TryToEmigrate(self, current_dome) end
+--    if self.transport_task then self:ClearTransportRequest() end
+--    return
+--  end -- Colonist:TryToEmigrate(current_dome)
 
+  -- new function for use here
+  function LanderRocketBase:IsLandedOnAsteroid()
+    return self:IsRocketLanded() and ObjectIsInEnvironment(self, "Asteroid")
+  end -- LanderRocketBase:IsLandedOnAsteroid()
   
   -- new function to correct cargo amount when lander lands on asteroid
   -- did not exist
@@ -231,7 +329,7 @@ function OnMsg.ClassesGenerate()
     if lf_print then print("CargoTransporter:ExpeditionLoadDrones running") end
     
     for idx, d in ipairs(found_drones or empty_table) do
-      if not dronefilter(d) then
+      if not dronefilter(d) then       -- if the drone was found it fine 
         d:DropCarriedResource()        -- in case they are delivering something
         d:SetCommand("WaitingCommand") -- have them stop what they are doing
         Sleep(100)                     -- lets give the command a sec to work
@@ -248,6 +346,7 @@ function OnMsg.ClassesGenerate()
       if drone == SelectedObj then
         SelectObj()
       end
+      drone:DropCarriedResource()   -- in case they are delivering something
       drone:SetCommandCenter(false, "do not orphan!")
       drone:SetHolder(self)
       drone:SetCommand("Disappear", "keep in holder")
@@ -276,6 +375,7 @@ function OnMsg.ClassesGenerate()
   				break
   			end -- not drone
   			table.insert(found_drones, drone)
+  			Sleep(50) -- give this loop a break
   		end -- while
   		
   		if lf_print then 
@@ -290,8 +390,9 @@ function OnMsg.ClassesGenerate()
   		if lf_print then print("Number of nearby drone controllers: ", #list) end
   		
   		-- remove any Lander Rockets - dont steal drones from other Landers
+  		-- except your own
   		for i = #list, 1, -1 do
-  		  if IsKindOf(list[i], "LanderRocketBase") then
+  		  if IsKindOf(list[i], "LanderRocketBase") and list[i] ~= self then
   		    table.remove(list, i)
   		    if lf_print then print("Removing lander rocket from drone controller list") end
   		  end -- if IsKindOf
@@ -303,14 +404,12 @@ function OnMsg.ClassesGenerate()
   		local idx = 1
   		while #found_drones < num_drones and #list > 0 do
   			local success
-  
+        
   			local controller = list[idx]
   			for i = 1, #(controller.drones or "") do
   				local drone = controller.drones[i]
   				-- find any idle drones and check if we've hit max added
-  				if drone.command == "Idle" and #found_drones < num_drones and
-  					drone:CanBeControlled() and not table.find(found_drones, drone)
-  				then
+  				if #found_drones < num_drones and drone.command == "Idle" and drone:CanBeControlled() and not table.find(found_drones, drone) then
   					table.insert(found_drones, drone)
   					success = true
   				end -- if drone.command
@@ -323,6 +422,7 @@ function OnMsg.ClassesGenerate()
   			end -- if success
   			
   			if idx > #list then idx = 1 end
+  			Sleep(50) -- give this loop a break
   		end -- while #found_drones
   
   		self.drone_summon_fail = #found_drones < num_drones
@@ -356,7 +456,15 @@ function OnMsg.ClassesGenerate()
       -- drop any onboard resources where they stand
       if IsKindOfClasses(rover, "RCTransport", "RCTerraformer", "RCConstructor", "RCHarvester") then
         rover:ReturnStockpiledResources()
+        BLRemptyStockpile(rover)
       end -- if IsKindOfClasses
+      
+      -- idle any auto mode rovers
+      if rover.auto_mode_on then
+        rover.auto_mode_on = false
+        rover:SetCommand("Idle")
+        Sleep(100) -- Give it chance to work
+      end -- if rover.auto_mode_on
       
       rover:SetHolder(self)
       rover:SetCommand("Disappear", "keep in holder")
@@ -415,7 +523,7 @@ function OnMsg.ClassesGenerate()
   	label = label or "Colonist"
   	local filterToUse = (ObjectIsInEnvironment(self, "Asteroid") and true) or adultfilter
   	local city = self.city or (Cities[self:GetMapID()]) or empty_table
-  	local cityDomes = city and city.labels and city.labels.Dome or empty_table
+  	local cityDomes = city and city.labels and city.labels.Community or empty_table  -- using Community here since asteroids have no "Dome" label
   	if lf_print then print(string.format("Found %d Domes to search", #cityDomes)) end
   	
   	-- added destination check to prevent forever stuck cycle
@@ -666,11 +774,40 @@ function OnMsg.ClassesGenerate()
   function ResourceOverview:GetAvailable(resource_type)
     if not g_BLR_Options.modEnabled then return Old_ResourceOverview_GetAvailable(self, resource_type) end -- short circuit
     if lf_printc then 
-      local round = RoundResourceAmount(self.data[resource_type])
+      local round = RoundDownResourceAmount(self.data[resource_type])
       print("Resource Amount: ", tostring(self.data[resource_type]), "  Amount: ", round)
     end -- if lf_print
-    return RoundResourceAmount(self.data[resource_type])
+    return RoundDownResourceAmount(self.data[resource_type])
   end -- ResourceOverview:GetAvailable(resource_type)
+  
+  
+  -- I gave the devs the fix and they chose to screw it up even worse, so now I need to fix their double screwup
+  -- the below re-writes fix all of it.
+  ---------------------------------------------------------------------------------------
+  local Old_ResourceOverview_GetProducedYesterday = ResourceOverview.GetProducedYesterday
+  function ResourceOverview:GetProducedYesterday(resource_type)
+    if not g_BLR_Options.modEnabled then return Old_ResourceOverview_GetProducedYesterday(self, resource_type) end
+    return RoundDownResourceAmount(self.city.gathered_resources_yesterday[resource_type] + self.data.produced_resources_yesterday[resource_type])
+  end -- ResourceOverview:GetProducedYesterday(resource_type)
+  
+  local Old_ResourceOverview_GetGatheredYesterday = ResourceOverview.GetGatheredYesterday
+  function ResourceOverview:GetGatheredYesterday(resource_type)
+    if not g_BLR_Options.modEnabled then return Old_ResourceOverview_GetGatheredYesterday(self, resource_type) end
+    return RoundDownResourceAmount(self.city.gathered_resources_yesterday[resource_type])
+  end --ResourceOverview:GetGatheredYesterday(resource_type)
+  
+  local Old_ResourceOverview_GetConsumedByConsumptionYesterday = ResourceOverview.GetConsumedByConsumptionYesterday
+  function ResourceOverview:GetConsumedByConsumptionYesterday(resource_type)
+    if not g_BLR_Options.modEnabled then return Old_ResourceOverview_GetConsumedByConsumptionYesterday(self, resource_type) end
+    return RoundDownResourceAmount(self.city.consumption_resources_consumed_yesterday[resource_type])
+  end --ResourceOverview:GetConsumedByConsumptionYesterday(resource_type)
+  
+  local Old_ResourceOverview_GetConsumedByMaintenanceYesterday = ResourceOverview.GetConsumedByMaintenanceYesterday
+  function ResourceOverview:GetConsumedByMaintenanceYesterday(resource_type)
+    if not g_BLR_Options.modEnabled then return Old_ResourceOverview_GetConsumedByConsumptionYesterday(self, resource_type) end
+    return RoundDownResourceAmount(self.city.maintenance_resources_consumed_yesterday[resource_type])
+  end --ResourceOverview:GetConsumedByMaintenanceYesterday(resource_type)
+  ---------------------------------------------------------------------------------------
 
 end -- function OnMsg.ClassesGenerate()
 
@@ -679,6 +816,25 @@ end -- function OnMsg.ClassesGenerate()
 function OnMsg.RocketLaunched(rocket)
   if g_BLR_Options.modEnabled and IsKindOf(rocket, "LanderRocketBase") and (not ObjectIsInEnvironment(rocket, "Asteroid")) then rocket:BLRresetDefaultPayload() end
 end -- OnMsg.RocketLaunched(rocket)
+
+
+function OnMsg.LoadGame()
+  BLRfixLanderRockets()
+end -- OnMsg.LoadGame()
+
+
+-- on rocket landing then extend the linger time
+function OnMsg.RocketLanded(rocket)
+  if IsKindOf(rocket, "LanderRocketBase") and ObjectIsInEnvironment(rocket, "Asteroid") then 
+    BLRextendAsteroidTime(rocket)
+  end -- if IsKindOf
+end -- OnMsg.RocketLanded(rocket)
+
+
+-- add variables to newly discover asteroids
+function OnMsg.SpawnedAsteroid(asteroid)
+  asteroid.BLR_extendedTime = false
+end -- OnMsg.SpawnedAsteroid(asteroid)
 
 
 function OnMsg.ToggleLFPrint(modname, lfvar)

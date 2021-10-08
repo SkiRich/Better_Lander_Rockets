@@ -3,12 +3,12 @@
 -- All rights reserved, duplication and modification prohibited.
 -- You may not copy it, package it, or claim it as your own.
 -- Created Sept 30th, 2021
--- Updated Oct 4th, 2021
+-- Updated Oct 7th, 2021
 
 local lf_print = false -- Setup debug printing in local file
                        -- Use if lf_print then print("something") end
 
-local StringIdBase = 17764706000 -- Better Lander Rockets    : 706000 - 706099  This File Start 0-29, Next: 6
+local StringIdBase = 17764706000 -- Better Lander Rockets    : 706000 - 706099  This File Start 0-29, Next: 8
 local mod_name = "Better Lander Rockets"
 local steam_id = "2619013940"
 local TableFind  = table.find
@@ -37,8 +37,9 @@ local function WaitForModConfig()
       if lf_print then print(string.format("%s WaitForModConfig Thread Continuing", mod_name)) end
 
       if ModConfigLoaded and ModConfig:IsReady() then
-        g_BLR_Options.modEnabled    = ModConfig:Get("Better_Lander", "modEnabled")
-        g_BLR_Options.rocketOptions = ModConfig:Get("Better_Lander", "rocketOptions")
+        g_BLR_Options.modEnabled         = ModConfig:Get("Better_Lander", "modEnabled")
+        g_BLR_Options.rocketOptions      = ModConfig:Get("Better_Lander", "rocketOptions")
+        g_BLR_Options.asteroidExtendTime = ModConfig:Get("Better_Lander", "asteroidExtendTime")
 
     	  ModLog(string.format("%s detected ModConfig running - Setup Complete", mod_name))
       else
@@ -73,12 +74,25 @@ function OnMsg.ModConfigReady()
     
     -- g_BLR_Options.rocketOptions
     ModConfig:RegisterOption("Better_Lander", "rocketOptions", {
-        name = T{StringIdBase + 4, "Rocket options:"},
-        desc = T{StringIdBase + 5, "Enable or disable individual rocket options such as Loadout keep all fixes"},
+        name = T{StringIdBase + 4, "Enable Rocket options:"},
+        desc = T{StringIdBase + 5, "Enable or disable individual rocket options such as Loadout (still keeps all fixes)"},
         type = "boolean",
         default = true,
         order = 2
     })
+
+    -- g_BLR_Options.asteroidExtendTime
+    ModConfig:RegisterOption("Better_Lander", "asteroidExtendTime", {
+        name = T{StringIdBase + 6, "Add Sols to asteroid on landing:"},
+        desc = T{StringIdBase + 7, "The amount of Sols to add to the asteroid linger time upon landing the first rocket."},
+        type = "number",
+        default = 2,
+        min = 0,
+        max = 50,
+        step = 1,
+        order = 3
+    })    
+    
 
 end -- OnMsg.ModConfigReady()
 
@@ -94,7 +108,12 @@ function OnMsg.ModConfigChanged(mod_id, option_id, value, old_value, token)
       -- g_BLR_Options.rocketOptions
       if option_id == "rocketOptions" then
         g_BLR_Options.rocketOptions = value
-      end -- g_BLR_Options.rocketOptions      
+      end -- g_BLR_Options.rocketOptions    
+      
+      -- g_BLR_Options.asteroidExtendTime
+      if option_id == "asteroidExtendTime" then
+        g_BLR_Options.asteroidExtendTime = value
+      end -- g_BLR_Options.asteroidExtendTime   
       
     end -- if ModConfigLoaded
 end --OnMsg.ModConfigChanged
