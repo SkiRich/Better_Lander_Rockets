@@ -1,11 +1,10 @@
 # Better Lander Rockets
 ## [v1.0] 10/04/21 12:55:47 AM
 
+### Release Candidiate
+
 #### ToDo
-- Set the default drones in asteroid to drones on rocket
-- turn off auto load on new rocket creation
-- Add in checks for DLC
-- Auto adjust precious minierals to min 50 
+- update stringidbase numbers
 
 --------------------------------------------------------
 ## [v0.3] 10/04/21 5:04:20 PM

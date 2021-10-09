@@ -2,7 +2,7 @@
 -- Author @SkiRich
 -- All rights reserved, duplication and modification prohibited.
 -- Created Sept 20th, 2021
--- Updated Oct 4th, 2021
+-- Updated Oct 9th, 2021
 
 local lf_print        = false  -- Setup debug printing in local file -- use Msg("ToggleLFPrint", "BLR", "printdebug") to toggle
 local lf_printc       = false  -- print for classes that are chatty
@@ -166,21 +166,13 @@ local function BLRemptyStockpile(rover)
 end -- BLRemptyStockpile(rover)
 
 
-  
--- holy shit this returns false when on an asteroid
---local Old_IsUnitInDome = IsUnitInDome
---function IsUnitInDome(unit)
---  if (not g_BLR_Options.modEnabled) or (not ObjectIsInEnvironment(unit, "Asteroid")) then return Old_IsUnitInDome(unit) end
---  if unit.holder then
---    return IsObjInDome(unit.holder)
---  else
---    local object_hex_grid = GetObjectHexGrid(unit)
---    local result = IsValidPos(unit) and GetDomeAtPoint(object_hex_grid, GetTopmostParent(unit))
---    if not result then return FindNearestObject(unit.city.labels.Community, unit) end
---    return result
---  end -- if (not g_BLR_Options.modEnabled)
---end -- IsUnitInDome(unit)
-  
+--------------------------------------------------------------------------------------------------
+
+-- just in case they load this mod and dont have the B&B DLC
+if not g_AvailableDlc.picard then
+    DefineClass.LanderRocketBase = {}
+    DefineClass.MicroGHabitat = {}
+end -- if not picard
 
 
 ------------------------------------------- OnMsgs --------------------------------------------------
@@ -270,19 +262,48 @@ function OnMsg.ClassesGenerate()
     return nil, nil
   end -- MicroGHabitat:GetNearestLandingSlot(ref_pos, ...)
   
-  
-  -- need to re-write this.  Causing a crash when colonist calls it when on an asteroid
---  local Old_Colonist_TryToEmigrate = Colonist.TryToEmigrate
---  function Colonist:TryToEmigrate(current_dome)
---    if (not g_BLR_Options.modEnabled) or (not ObjectIsInEnvironment(self, "Asteroid")) then return Old_Colonist_TryToEmigrate(self, current_dome) end
---    if self.transport_task then self:ClearTransportRequest() end
---    return
---  end -- Colonist:TryToEmigrate(current_dome)
 
   -- new function for use here
   function LanderRocketBase:IsLandedOnAsteroid()
     return self:IsRocketLanded() and ObjectIsInEnvironment(self, "Asteroid")
   end -- LanderRocketBase:IsLandedOnAsteroid()
+
+
+  -- new function to replace ancestor
+  -- fixes missing waypoints for entrances
+  -- copy from CargoTransporter.lua
+  function LanderRocketBase:GetEntrancePoint()
+    if not g_BLR_Options.modEnabled then return CargoTransporter.GetEntrancePoint(self) end
+    if not self.waypoint_chains then self.waypoint_chains = GetEntityWaypointChains(self.entity) end
+    local entrance
+    if not self.waypoint_chains then
+      return entrance
+    end
+    if self.waypoint_chains.entrance then
+      entrance = self.waypoint_chains.entrance[1]
+    end
+    if self.waypoint_chains.rocket_exit then
+      entrance = self.waypoint_chains.rocket_exit[1]
+    end
+    return entrance
+  end -- LanderRocketBase:GetEntrancePoint()
+
+  
+  -- new function, copied from Rocketbase.lua ancestor
+  -- fixing colonist suffocation here
+  local Old_LanderRocketBase_Disembark = LanderRocketBase.Disembark
+  function LanderRocketBase:Disembark(crew)
+    if not g_BLR_Options.modEnabled then return Old_LanderRocketBase_Disembark(self, crew) end -- short circuit
+    local crew = crew or empty_table -- safety
+    local domes, safety_dome = GetDomesInWalkableDistance(self.city, self:GetPos())
+    for _, unit in pairs(crew) do
+      unit:Appear(self)
+      unit:SetCommand("ReturnFromExpedition", self, ChooseDome(unit.traits, domes, safety_dome))
+      Sleep(100)
+      unit:ClearDetrimentalStatusEffects()  -- wtf they were just on a rocket from a near mars object, why are they suffocating?
+      Sleep(1000 + SessionRandom:Random(0, 500))
+    end -- for _,
+  end -- LanderRocketBase:Disembark(crew)
   
   -- new function to correct cargo amount when lander lands on asteroid
   -- did not exist
@@ -732,8 +753,11 @@ function OnMsg.ClassesGenerate()
     if not g_BLR_Options.modEnabled and g_BLR_Options.rocketOptions then return Old_LanderRocketBase_SetDefaultPayload(self, payload) end -- short circuit
     if lf_print then print("SetDefaultPayload running") end
     if ObjectIsInEnvironment(self, "Asteroid") then
+      if self.drones and #self.drones > 0 then
+        payload:SetItem("Drone", #self.drones)
+      end -- if self.drones
       return
-    end
+    end -- if ObjectIsInEnvironment
     if not self.BLR_loadout then self.BLR_loadout = "Remember" end
     if not self.BLR_defaultRocketCargoPreset then self.BLR_defaultRocketCargoPreset = table.copy(BLR_defaultRocketCargoPreset) or empty_table end -- make a local copy on the rocket
     if self.BLR_loadout == "Remember" then
@@ -814,7 +838,11 @@ end -- function OnMsg.ClassesGenerate()
 ------------------------------------------------------------------------------------------------
 
 function OnMsg.RocketLaunched(rocket)
-  if g_BLR_Options.modEnabled and IsKindOf(rocket, "LanderRocketBase") and (not ObjectIsInEnvironment(rocket, "Asteroid")) then rocket:BLRresetDefaultPayload() end
+  if g_BLR_Options.modEnabled and IsKindOf(rocket, "LanderRocketBase") then
+    
+    if not ObjectIsInEnvironment(rocket, "Asteroid") then rocket:BLRresetDefaultPayload() end -- reset payload
+
+  end -- if lander rocket
 end -- OnMsg.RocketLaunched(rocket)
 
 
@@ -831,10 +859,18 @@ function OnMsg.RocketLanded(rocket)
 end -- OnMsg.RocketLanded(rocket)
 
 
--- add variables to newly discover asteroids
+
 function OnMsg.SpawnedAsteroid(asteroid)
+  -- add variables to newly discover asteroids
   asteroid.BLR_extendedTime = false
 end -- OnMsg.SpawnedAsteroid(asteroid)
+
+
+-- on rocket built on mars
+function OnMsg.ConstructionComplete(rocket)
+  if IsKindOf(rocket, "LanderRocketBase") then rocket.auto_load_enabled = false end
+end -- OnMsg.ConstructionComplete(rocket)
+
 
 
 function OnMsg.ToggleLFPrint(modname, lfvar)

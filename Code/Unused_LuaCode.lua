@@ -47,3 +47,33 @@ local BLRonAction = function(self, host, source)
   end, self)
   CloseDialog("PayloadRequest")
 end -- OnAction function replacement BLRonAction
+
+
+function OnMsg.SpawnedAsteroid(asteroid)
+  -- add variables to newly discover asteroids
+  asteroid.BLR_extendedTime = false
+  
+
+  -- adjust deposits for long linger asteroids
+  local deposits   = {}
+  local realm      = GetRealmByID(asteroid.map)
+  local longlinger = (((asteroid.end_time - asteroid.start_time) + 0.00) / const.Scale.sols) >= 7
+  if realm then 
+    realm:MapForEach("map", "SubsurfaceDepositPreciousMinerals", function(obj)
+      deposits[deposits+1] = obj
+    end) -- map for each
+    ex(deposits, nil, "deposits")
+    ex(realm, nil, "realm")
+    ex(asteroid, nil, "asteroid")
+  end -- if realm
+  if longlinger and #deposits > 0 then
+    for i = 1, #deposits do
+      if deposits[i].max_amount < (50 * const.ResourceScale) then 
+        deposits[i].max_amount = (50 * const.ResourceScale)
+        deposits[i].amount = deposits[i].max_amount
+      end -- if deposits
+    end -- for i
+  end -- if longlinger
+
+  
+end -- OnMsg.SpawnedAsteroid(asteroid)

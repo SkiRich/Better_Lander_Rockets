@@ -2,7 +2,7 @@
 -- Author @SkiRich
 -- All rights reserved, duplication and modification prohibited.
 -- Created Sept 20th, 2021
--- Updated Oct 4th, 2021
+-- Updated Oct 9th, 2021
 
 local lf_print        = false  -- Setup debug printing in local file -- use Msg("ToggleLFPrint", "BLR", "printdebug") to toggle
 local lf_printc       = false  -- print for classes that are chatty
@@ -15,12 +15,13 @@ local mod_name = "Better Lander Rockets"
 local iconBLRSection  = ModDir.."UI/Icons/BLRSection.png"
 
 -- used to fix rounding errors in stock
-local function RoundResourceAmount(r)
+-- same round down forumla without adding back the 1000's
+local function RoundDownResAmtScaled(r)
   r = r or 0
   r = r / const.ResourceScale
-  r = (r - (r % 1)) * const.ResourceScale
+  r = (r - (r % 1)) 
   return r
-end -- function RoundResourceAmount(r)
+end -- function RoundDownResAmtScaled(r)
 
 
 -- set rollover text
@@ -28,22 +29,37 @@ local function BLRsetRollOverText()
   local texts = {}
   texts[1] = T{StringIdBase + 40, "Loadout is the default cargo request when landing on Mars."}
   texts[2] = T{StringIdBase + 41, "Launch issues shows whats holding up a launch."}
-  texts[3] = T{StringIdBase + 42, "Cargo issues are problems wth requested cargo.<newline>Drones rovers and prefabs are considered cargo."}
-  texts[4] = T{StringIdBase + 43, "Resource issues are problems with resources on the planet or asteroid."}
+  texts[3] = T{StringIdBase + 42, "Cargo issues are problems with requested cargo.<newline>Drones rovers and prefabs are considered cargo."}
+  texts[4] = T{StringIdBase + 42, "Drone issues are problems with drones."}
+  texts[4] = T{StringIdBase + 44, "Resource issues are problems gathering resources on the planet or asteroid."}
 
   return table.concat(texts, "<newline><left>")
 end -- BLRsetRollOverText()
 
 
+
 -- function to find any issues with resources on planet when loading
 local function BLRfindResourceIssues(rocket)
   local stock = {}
+  local rockets = rocket.city.labels.LanderRocketBase or empty_table
   GatherResourceOverviewData(stock, rocket.city or UICity) -- check the current map
-
+  
+  -- gather all rockets on the the ground stock
+  local function RocketStock(item)
+    local total = 0
+    for _, r in ipairs(rockets) do
+      if r:IsRocketLanded() and r.cargo[item] then total = total + r.cargo[item].amount end
+    end -- for _, 
+    return total
+  end -- RocketStock(item)
+  
   local cargo = rocket:BuildCargoInfo(rocket.cargo)
   local issues = {}
   for _, payload in pairs(cargo) do
-    if payload.requested > 0 and stock[payload.class] and payload.requested > (payload.amount + (RoundResourceAmount(stock[payload.class]))) then 
+    local item = payload.class
+    --print("Item: ", payload.class, " Ask: ", (payload.requested - payload.amount) , " Planet Stock: ", RoundDownResAmtScaled(stock[item]), "RocketStock: ", RocketStock(item))
+    if payload.requested > 0 and stock[item] and payload.requested > payload.amount and
+      (payload.requested - payload.amount) > (RoundDownResAmtScaled(stock[item]) - RocketStock(item)) then      
       issues[#issues+1] = payload.class 
     end -- if payload.requested > 0
   end -- for _, payload 
