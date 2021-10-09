@@ -9,7 +9,7 @@ local lf_printc       = false  -- print for classes that are chatty
 local lf_printDebug   = false
 
 
-local StringIdBase = 17764706000 -- Better Lander Rockets    : 706000 - 706099  This File Start 40-89, Next: 57
+local StringIdBase = 17764706000 -- Better Lander Rockets    : 706000 - 706099  This File Start 40-89, Next: 72
 local ModDir   = CurrentModPath
 local mod_name = "Better Lander Rockets"
 local iconBLRSection  = ModDir.."UI/Icons/BLRSection.png"
@@ -30,7 +30,7 @@ local function BLRsetRollOverText()
   texts[1] = T{StringIdBase + 40, "Loadout is the default cargo request when landing on Mars."}
   texts[2] = T{StringIdBase + 41, "Launch issues shows whats holding up a launch."}
   texts[3] = T{StringIdBase + 42, "Cargo issues are problems with requested cargo.<newline>Drones rovers and prefabs are considered cargo."}
-  texts[4] = T{StringIdBase + 42, "Drone issues are problems with drones."}
+  texts[4] = T{StringIdBase + 43, "Drone issues are problems with drones."}
   texts[4] = T{StringIdBase + 44, "Resource issues are problems gathering resources on the planet or asteroid."}
 
   return table.concat(texts, "<newline><left>")
@@ -63,8 +63,8 @@ local function BLRfindResourceIssues(rocket)
       issues[#issues+1] = payload.class 
     end -- if payload.requested > 0
   end -- for _, payload 
-  if #issues > 0 then return true, T{StringIdBase + 44, "Not Enough"} end
-  return false, T{StringIdBase + 45, "None"}
+  if #issues > 0 then return true, T{StringIdBase + 45, "Not Enough"} end
+  return false, T{StringIdBase + 46, "None"}
 end -- BLRfindResourceIssues(rocket)
 
 
@@ -81,11 +81,11 @@ local function BLRfindCargoIssues(rocket)
     for _, payload in pairs(cargo) do
       if payload.requested > 0 and (not crew[payload.class]) and payload.requested > payload.amount then issues[#issues+1] = payload.class end
     end -- for _,
-    if dest and cargofail then return true, T{StringIdBase + 46, "Cargo missing"} end
-    if #issues > 0 then return true, T{StringIdBase + 47, "Cargo Not Loaded"} end -- if #issues
+    if dest and cargofail then return true, T{StringIdBase + 47, "Cargo missing"} end
+    if #issues > 0 then return true, T{StringIdBase + 48, "Cargo Not Loaded"} end -- if #issues
   end -- not rocket:GetCargoLoadingStatus()
-  if rocket:GetCargoLoadingStatus() == "loading" then return false, T{StringIdBase + 48, "Cargo requested"} end
-  return false, T{StringIdBase + 49, "None"}
+  if rocket:GetCargoLoadingStatus() == "loading" then return false, T{StringIdBase + 49, "Cargo requested"} end
+  return false, T{StringIdBase + 50, "None"}
 end -- BLRfindCargoIssues(rocket)
 
 -- function to find any drone issues on the rocket when loading
@@ -107,20 +107,20 @@ local function BLRfindDroneIssues(rocket)
       -- check if on an asteroid and asking for more drones than attached
       local dronesAttached = #rocket.drones or 0
       if dronefail and issues[1].class and issues[1].requested > dronesAttached then 
-        return T{StringIdBase + 46, "Not enough drones"}
+        return T{StringIdBase + 51, "Not enough drones"}
       elseif dronefail and issues[1].class and rocket.drones and issues[1].requested <= dronesAttached then
         -- find out whats going on with the drones
         for _, drone in ipairs(rocket.drones or empty_table) do
-          if drone.command == "Charge" or drone.command == "EmergencyPower" then return T{StringIdBase + 46, "Drones recharging"} end
-          if table.find(rocket.drones_entering, drone) or table.find(rocket.drones_exiting, drone) then return T{StringIdBase + 46, "Drones busy"} end
+          if drone.command == "Charge" or drone.command == "EmergencyPower" then return T{StringIdBase + 52, "Drones recharging"} end
+          if table.find(rocket.drones_entering, drone) or table.find(rocket.drones_exiting, drone) then return T{StringIdBase + 53, "Drones busy"} end
         end -- for _, drone
       end -- if dronefail and issues.class
-      return T{StringIdBase + 46, "Drones unavailable"}
+      return T{StringIdBase + 54, "Drones unavailable"}
     end -- if dronefail and #issues > 0
   end -- not rocket:GetCargoLoadingStatus()
 
-  if rocket:GetCargoLoadingStatus() == "loading" then return T{StringIdBase + 48, "Drones requested"} end
-  return T{StringIdBase + 49, "None"}
+  if rocket:GetCargoLoadingStatus() == "loading" then return T{StringIdBase + 55, "Drones requested"} end
+  return T{StringIdBase + 56, "None"}
 end -- BLRfindDroneIssues(rocket)
 
 -- function to find any crew issues on the rocket when loading
@@ -133,9 +133,9 @@ function BLRfindCrewIssues(rocket)
   for _, payload in pairs(cargo) do
     if payload.requested > 0 and crew[payload.class] and payload.requested > payload.amount then issues[#issues+1] = payload.class end
   end -- for _,
-  if (#issues > 0) and not rocket:GetCargoLoadingStatus() then return true, T{StringIdBase + 50, "Crew missing"} end -- if #issues
-  if (#issues > 0) and rocket:GetCargoLoadingStatus() == "loading" then return false, T{StringIdBase + 51, "Crew requested"} end
-  return false, T{StringIdBase + 49, "None"}
+  if (#issues > 0) and not rocket:GetCargoLoadingStatus() then return true, T{StringIdBase + 57, "Crew missing"} end -- if #issues
+  if (#issues > 0) and rocket:GetCargoLoadingStatus() == "loading" then return false, T{StringIdBase + 58, "Crew requested"} end
+  return false, T{StringIdBase + 56, "None"}
 end -- BLRfindCrewIssues(rocket) 
 
 
@@ -147,17 +147,17 @@ local function BLRgetStatusTexts(rocket)
   local droneIssueTxt                   = BLRfindDroneIssues(rocket)
   local resourceIssue, resourceIssueTxt = BLRfindResourceIssues(rocket)
   local crewIssue, crewIssueTxt         = BLRfindCrewIssues(rocket)
-  texts[1] = T{StringIdBase + 52, "Loadout:<right><loadout>", loadout = rocket.BLR_loadout or "*"}
-  texts[2] = T{StringIdBase + 53, "Launch Issues:<right><issues>", issues = rocket:GetLaunchIssue() or "None"}
-  texts[3] = T{StringIdBase + 54, "Cargo Issues:<right><issues>", issues = cargoIssueTxt or "*"}
-  texts[4] = T{StringIdBase + 54, "Drone Issues:<right><issues>", issues = droneIssueTxt or "*"}
-  texts[5] = T{StringIdBase + 55, "Resource Issues:<right><issues>", issues = resourceIssueTxt or "*"}
-  texts[6] = T{StringIdBase + 56, "Crew Issues:<right><issues>", issues = crewIssueTxt or "*"}
+  texts[1] = T{StringIdBase + 59, "Loadout:<right><loadout>", loadout = rocket.BLR_loadout or "*"}
+  texts[2] = T{StringIdBase + 60, "Launch Issues:<right><issues>", issues = rocket:GetLaunchIssue() or "None"}
+  texts[3] = T{StringIdBase + 61, "Cargo Issues:<right><issues>", issues = cargoIssueTxt or "*"}
+  texts[4] = T{StringIdBase + 62, "Drone Issues:<right><issues>", issues = droneIssueTxt or "*"}
+  texts[5] = T{StringIdBase + 63, "Resource Issues:<right><issues>", issues = resourceIssueTxt or "*"}
+  texts[6] = T{StringIdBase + 64, "Crew Issues:<right><issues>", issues = crewIssueTxt or "*"}
   
-  if cargoIssue and dest then texts[2] = T{StringIdBase + 57, "Launch Issues:<right>Cargo"} end    
-  if crewIssue and dest then texts[2] = T{StringIdBase + 58, "Launch Issues:<right>Crew"} end
-  if resourceIssue then texts[2] = T{StringIdBase + 59, "Launch Issues:<right>Resources"} end
-  if not rocket:HasEnoughFuelToLaunch() then texts[2] = T{StringIdBase + 60, "Launch Issues:<right>Launch Fuel"} end
+  if cargoIssue and dest then texts[2] = T{StringIdBase + 65, "Launch Issues:<right>Cargo"} end    
+  if crewIssue and dest then texts[2] = T{StringIdBase + 66, "Launch Issues:<right>Crew"} end
+  if resourceIssue then texts[2] = T{StringIdBase + 67, "Launch Issues:<right>Resources"} end
+  if not rocket:HasEnoughFuelToLaunch() then texts[2] = T{StringIdBase + 68, "Launch Issues:<right>Launch Fuel"} end
   
   return table.concat(texts, "<newline><left>")
 end -- BLRGetStatusTexts(rocket)
@@ -206,9 +206,9 @@ function OnMsg.ClassesBuilt()
         "__template", "InfopanelSection",
         "Icon", iconBLRSection,
         "Title", T{StringIdBase, "Better Lander Rocket Status"},
-        "RolloverTitle", T{StringIdBase + 61, "Better Lander Rockets"},
+        "RolloverTitle", T{StringIdBase + 69, "Better Lander Rockets"},
         "RolloverText", BLRsetRollOverText(),
-        "RolloverHint", T{StringIdBase + 62, "<right_click>Toggle Loadout"},
+        "RolloverHint", T{StringIdBase + 70, "<right_click>Toggle Loadout"},
         "OnContextUpdate", function(self, context)  
           if not context.BLR_loadout then context.BLR_loadout = "Remember" end
         end, -- OnContextUpdate
@@ -251,7 +251,7 @@ function OnMsg.ClassesBuilt()
               "__template", "InfopanelText",
               "Id", "idBLRstatusText",
               "Margins", box(0, 0, 0, 0),
-              "Text", T{StringIdBase + 63, "Loadout:<newline>Launch Issues:<newline>Cargo Issues:<newline>Drone Issues:<newline>Resource Issues:<newline>Crew Issues:"},
+              "Text", T{StringIdBase + 71, "Loadout:<newline>Launch Issues:<newline>Cargo Issues:<newline>Drone Issues:<newline>Resource Issues:<newline>Crew Issues:"},
               "OnContextUpdate", function(self, context)
                 self:SetText(BLRgetStatusTexts(context))
               end, -- OnContextUpdate
