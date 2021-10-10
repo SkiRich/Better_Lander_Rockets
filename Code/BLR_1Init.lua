@@ -694,10 +694,18 @@ function OnMsg.ClassesGenerate()
     crew = crew or empty_table
     prefabs = prefabs or empty_table
     for _, rover in pairs(rovers) do
-      self:BLRExpeditionLoadRover(rover)
+      if IsKindOf(self, "LanderRocketBase") then 
+        self:BLRExpeditionLoadRover(rover)
+      else
+        self:ExpeditionLoadRover(rover)
+      end -- if IsKindOf
       SetCargoAmount(self.cargo, rover.class, 1)
     end -- for _
-    self:BLRExpeditionLoadDrones(drones, quick_load)
+    if IsKindOf(self, "LanderRocketBase") then 
+      self:BLRExpeditionLoadDrones(drones, quick_load)
+    else
+      self:ExpeditionLoadDrones(drones, quick_load)
+    end -- if IsKindOf
     SetCargoAmount(self.cargo, "Drone", #drones)
     self:ExpeditionLoadCrew(crew)
     for _, member in pairs(crew) do
@@ -828,7 +836,7 @@ function OnMsg.ClassesGenerate()
       self.BLR_defaultRocketCargoPreset = table.copy(self.BLR_defaultRocketCargoPreset) or empty_table
     elseif self.BLR_loadout == "Default" then
       self.BLR_defaultRocketCargoPreset = table.copy(LanderRocketCargoPreset) or empty_table
-    elseif self.BLR_loadout == "Nothing" then
+    elseif self.BLR_loadout == "Empty" then
       return
     end --  if self.BLR_loadout
     

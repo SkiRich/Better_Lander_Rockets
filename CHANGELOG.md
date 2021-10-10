@@ -1,7 +1,7 @@
 # Better Lander Rockets
 ## [v1.0] 10/04/21 12:55:47 AM
 
-### Release Candidiate
+Initial Release
 
 #### ToDo
 

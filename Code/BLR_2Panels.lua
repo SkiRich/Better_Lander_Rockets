@@ -230,8 +230,8 @@ function OnMsg.ClassesBuilt()
                       if rocket.BLR_loadout == "Remember" then
                         rocket.BLR_loadout = "Default"
                       elseif rocket.BLR_loadout == "Default" then
-                        rocket.BLR_loadout = "Nothing"
-                      elseif rocket.BLR_loadout == "Nothing" then
+                        rocket.BLR_loadout = "Empty"
+                      elseif rocket.BLR_loadout == "Empty" then
                         rocket.BLR_loadout = "Remember"
                       end -- if rocket.BLR_loadout
                     end -- button R
