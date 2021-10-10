@@ -4,6 +4,7 @@
 -- Created Sept 20th, 2021
 -- Updated Oct 9th, 2021
 
+
 local lf_print        = false  -- Setup debug printing in local file -- use Msg("ToggleLFPrint", "BLR", "printdebug") to toggle
 local lf_printc       = false  -- print for classes that are chatty
 local lf_printd       = false  -- print dialog redirect debugs
@@ -43,7 +44,7 @@ local function SortByDist(a, b)
 	return a:GetVisualDist2D(sort_obj) < b:GetVisualDist2D(sort_obj)
 end -- SortByDist
 
--- used in ExpeditionLoadDrones and BLRExpeditionFindDrones
+-- used in BLRExpeditionLoadDrones and BLRExpeditionFindDrones
 local dronefilter = function(drone)
   return drone:CanBeControlled() and (not drone.holder) and IsValid(drone) and IsValidPos(drone) -- dont take drones inside a rocket
 end -- dronefilter
@@ -166,12 +167,20 @@ local function BLRemptyStockpile(rover)
 end -- BLRemptyStockpile(rover)
 
 
+-- cheat a new asteroid
+function BLRcheatSpawnAsteroid()
+  local asteroid = table.rand(Presets.DiscoveryAsteroidPreset.Default)
+  UIColony:SpawnAsteroid(asteroid)
+end -- BLRcheatSpawnAsteroid()
+
+
 --------------------------------------------------------------------------------------------------
 
 -- just in case they load this mod and dont have the B&B DLC
 if not g_AvailableDlc.picard then
-    DefineClass.LanderRocketBase = {}
-    DefineClass.MicroGHabitat = {}
+  DefineClass.Asteroids = {}
+  DefineClass.LanderRocketBase = {}
+  DefineClass.MicroGHabitat = {}
 end -- if not picard
 
 
@@ -261,7 +270,67 @@ function OnMsg.ClassesGenerate()
   function MicroGHabitat:GetNearestLandingSlot(ref_pos, ...)
     return nil, nil
   end -- MicroGHabitat:GetNearestLandingSlot(ref_pos, ...)
-  
+
+
+  --rewrite from Asteroids.lua
+  -- intercept call and save orbiting rockets and rockets on their way to asteroid
+  local Old_Asteroids_NotifyRocketsAsteroidMovingOutOfRange = Asteroids.NotifyRocketsAsteroidMovingOutOfRange
+  function Asteroids:NotifyRocketsAsteroidMovingOutOfRange(asteroid)
+    if not g_BLR_Options.modEnabled then return Old_Asteroids_NotifyRocketsAsteroidMovingOutOfRange(self, asteroid) end
+
+    -- look for any rockets in orbit
+    local city = Cities[asteroid.map]
+    local lost_rockets = {}
+    
+    if city then
+      for _, rocket in ipairs(city.labels.AllRockets or empty_table) do
+        local orbiting_rocket = (rocket.command == "WaitInOrbit") and (rocket.cargo.Fuel.amount >= 15)
+        if orbiting_rocket then
+          -- send them home
+          rocket.target_spot = HomeColonySpot()
+          rocket.cargo.Fuel.amount = rocket.cargo.Fuel.amount - 15
+          rocket:TransferToMap(HomeColonySpot().map)
+          rocket:SetCommand("FlyToSpot", HomeColonySpot())
+          Sleep(100) -- just in case
+        end -- orbiting_rocket
+        if not rocket.command == "FlyToSpot" then
+          table.insert(lost_rockets, rocket)
+        end -- if not rocket.command
+      end -- for _, rocket
+    else
+      -- determine if any enroute or already orbiting asteroid not map switched
+      local rockets = UIColony.city_labels.labels.LanderRocketBase or empty_table
+      local save_rockets = {}
+      for _, rocket in ipairs(rockets) do
+        if rocket.target_spot and (rocket.target_spot.map == asteroid.map) and (rocket.command == "FlyToSpot" or rocket.command == "WaitInOrbit") and (rocket.cargo.Fuel.amount >= 15) then
+          table.insert(save_rockets, rocket)
+        elseif rocket.target_spot and (rocket.target_spot.map == asteroid.map) and (rocket.command == "FlyToSpot" or rocket.command == "WaitInOrbit") and (rocket.cargo.Fuel.amount < 15) then
+          table.insert(lost_rockets, rocket)
+        end -- if rocket
+      end -- for _, rocket
+      for i = 1, #save_rockets do
+        local rocket = save_rockets[i]
+        rocket.target_spot = HomeColonySpot()
+        rocket.cargo.Fuel.amount = rocket.cargo.Fuel.amount - 15
+        rocket:TransferToMap(HomeColonySpot().map)
+        rocket:SetCommand("FlyToSpot", HomeColonySpot())      
+      end -- for i
+      -- if map not exposed yet then these should have the rockets listed in the asteroid object here
+      -- since we are sending the rockets home or blowing them up just nil out the asteroid object here
+      MapSwitchCallbackRockets[asteroid.map] = nil
+      MapSwitchCallbacks[asteroid.map] = nil
+    end -- if city
+
+    -- kill the rockets that cant come home
+    for _, rocket in ipairs(lost_rockets) do
+      Msg("RocketLost", rocket)
+      DoneObject(rocket)
+    end -- for _, rocket
+
+    -- run the old function to finish up
+    return Old_Asteroids_NotifyRocketsAsteroidMovingOutOfRange(self, asteroid)
+  end -- Asteroids:NotifyRocketsAsteroidMovingOutOfRange(asteroid)
+
 
   -- new function for use here
   function LanderRocketBase:IsLandedOnAsteroid()
@@ -338,25 +407,21 @@ function OnMsg.ClassesGenerate()
     return not self.control_override and self.command ~= "Malfunction" and self.command ~= "Dead" and not self.disappeared and not self:IsShroudedInRubble()
   end -- DroneBase:CanBeControlled()
 
-
-  -- rewrite from CargoTransporter.lua
+  
+  -- new function
+  -- copied from CargoTransporter.lua
   -- intercept this function only for Lander Rockets and make sure drones drop any resources before despawn.
   -- this is so we can select nearby drones faster without the default filter.
-  local Old_CargoTransporter_ExpeditionLoadDrones = CargoTransporter.ExpeditionLoadDrones
-  function CargoTransporter:ExpeditionLoadDrones(found_drones, quick_load)
-    if (not g_BLR_Options.modEnabled) or (not IsKindOf(self, "LanderRocketBase")) then 
-      return Old_CargoTransporter_ExpeditionLoadDrones(self, found_drones, quick_load)  -- short circuit
-    end -- if not
-    if lf_print then print("CargoTransporter:ExpeditionLoadDrones running") end
+  function CargoTransporter:BLRExpeditionLoadDrones(found_drones, quick_load)
+    if lf_print then print("CargoTransporter:BLRExpeditionLoadDrones running") end
     
     for idx, d in ipairs(found_drones or empty_table) do
       if not dronefilter(d) then       -- if the drone was found it fine 
         d:DropCarriedResource()        -- in case they are delivering something
-        d:SetCommand("WaitingCommand") -- have them stop what they are doing
-        Sleep(100)                     -- lets give the command a sec to work
         local controller = d.command_center
         d:DespawnNow()
         d = controller.city:CreateDrone()
+        Sleep(100)
         d.init_with_command = false
         d:SetCommandCenter(controller)
         found_drones[idx] = d
@@ -372,7 +437,7 @@ function OnMsg.ClassesGenerate()
       drone:SetHolder(self)
       drone:SetCommand("Disappear", "keep in holder")
     end -- for _, drone
-  end -- CargoTransporter:ExpeditionLoadDrones(found_drones, quick_load)
+  end -- CargoTransporter:BLRExpeditionLoadDrones(found_drones, quick_load)
   
   
   -- new function
@@ -458,13 +523,12 @@ function OnMsg.ClassesGenerate()
   	end -- while self:HasDestination() do
   end  -- function CargoTransporter:BLRexpeditionFindDrones
 
-
-  -- rewrite from CargoTransporter.lua
+  
+  -- new function
+  -- copied from CargoTransporter.lua
   -- just making sure resources are dropped for any rovertype that carries them
-  local Old_CargoTransporter_ExpeditionLoadRover = CargoTransporter.ExpeditionLoadRover
-  function CargoTransporter:ExpeditionLoadRover(rover)
-    if not g_BLR_Options.modEnabled then return Old_CargoTransporter_ExpeditionLoadRover(rover) end -- short circuit
-    if lf_print then print("CargoTransporter:ExpeditionLoadRover running") end
+  function CargoTransporter:BLRExpeditionLoadRover(rover)
+    if lf_print then print("CargoTransporter:BLRExpeditionLoadRover running") end
     if rover then
       if rover == SelectedObj then
         SelectObj()
@@ -490,7 +554,7 @@ function OnMsg.ClassesGenerate()
       rover:SetHolder(self)
       rover:SetCommand("Disappear", "keep in holder")
     end -- if rover
-  end -- CargoTransporter:ExpeditionLoadRover(rover)
+  end -- CargoTransporter:BLRExpeditionLoadRover(rover)
 
 
   -- new function
@@ -630,10 +694,10 @@ function OnMsg.ClassesGenerate()
     crew = crew or empty_table
     prefabs = prefabs or empty_table
     for _, rover in pairs(rovers) do
-      self:ExpeditionLoadRover(rover)
+      self:BLRExpeditionLoadRover(rover)
       SetCargoAmount(self.cargo, rover.class, 1)
     end -- for _
-    self:ExpeditionLoadDrones(drones, quick_load)
+    self:BLRExpeditionLoadDrones(drones, quick_load)
     SetCargoAmount(self.cargo, "Drone", #drones)
     self:ExpeditionLoadCrew(crew)
     for _, member in pairs(crew) do
