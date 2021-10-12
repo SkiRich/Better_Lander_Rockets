@@ -1,4 +1,17 @@
 # Better Lander Rockets
+## [v1.1.1] 10/12/21 5:08:38 PM
+#### Changed
+- CargoTransporter:BLRExpeditionLoadDrones(found_drones, quick_load) 
+
+#### Fixed Issues
+- after drones despawned cannot call createdrone, city is nil
+using rocket self as the controller from now on.
+
+#### Todo
+- resource loadout when rockets on asteroid
+- manual unload rocket
+
+--------------------------------------------------------
 ## [v1.1.0] 10/12/21 4:28:14 AM
 #### Changed
 - BLRfixLanderRockets() added pin add routine to rocket fixups
