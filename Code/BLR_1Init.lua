@@ -533,8 +533,8 @@ function OnMsg.ClassesGenerate()
           local rocket = drone.s_request:GetBuilding()
           table.remove_entry(rocket.drones_entering, d)
         end -- if DroneApproachingRocket(d)   
-        d:DropCarriedResource()        -- in case they are delivering something
-        local controller = d.command_center
+        d:DropCarriedResource()   -- in case they are delivering something
+        local controller = self   -- changed this to the rocket since Despawn could be causing issues when the drone no longer exists.
         d:DespawnNow()
         d = controller.city:CreateDrone()
         Sleep(100)
@@ -548,7 +548,7 @@ function OnMsg.ClassesGenerate()
       if drone == SelectedObj then
         SelectObj()
       end
-      drone:DropCarriedResource()   -- in case they are delivering something
+      drone:DropCarriedResource()   -- in case they are still delivering something
       drone:SetCommandCenter(false, "do not orphan!")
       drone:SetHolder(self)
       drone:SetCommand("Disappear", "keep in holder")
@@ -967,6 +967,7 @@ function OnMsg.ClassesGenerate()
 
   -- rewrite from ResourceOverview.lua
   -- they are using the wrong math
+  -- this is in the load cargo screen of the rocket.
   local Old_ResourceOverview_GetAvailable = ResourceOverview.GetAvailable
   function ResourceOverview:GetAvailable(resource_type)
     if not g_BLR_Options.modEnabled then return Old_ResourceOverview_GetAvailable(self, resource_type) end -- short circuit
