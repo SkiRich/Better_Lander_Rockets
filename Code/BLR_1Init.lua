@@ -2,7 +2,7 @@
 -- Author @SkiRich
 -- All rights reserved, duplication and modification prohibited.
 -- Created Sept 20th, 2021
--- Updated Oct 9th, 2021
+-- Updated Oct 12th, 2021
 
 
 local lf_print        = false  -- Setup debug printing in local file -- use Msg("ToggleLFPrint", "BLR", "printdebug") to toggle
@@ -139,8 +139,9 @@ local function BLRfixLanderRockets()
   if not g_BLR_Options.modEnabled then return end -- shortcircuit
   local rockets = UIColony.city_labels.labels.LanderRocketBase or empty_table
   
-  -- fix for stuck cargo crew
+  
   for _, rocket in ipairs(rockets) do
+    -- fix for stuck cargo crew
     if rocket:IsRocketLanded() and rocket.crew and (#rocket.crew == 0) then
       local manifest = CreateManifest(rocket.cargo or empty_table)
       local crew     = manifest.passengers or empty_table
@@ -148,6 +149,10 @@ local function BLRfixLanderRockets()
         if crew[payload.class] and payload.amount > 0 and payload.requested == 0 then payload.amount = 0 end -- zero out passenger cargo
       end -- for _,      
     end -- if rocket:IsRocketLanded()
+    
+    -- add pin hint thread to waiting rockets
+    if rocket.command == "WaitInOrbit" then rocket:BLRaddPinChangeThread() end
+    
   end -- for _, rocket
   
   -- extend time for asteroids with rockets on them that didnt get the extension
@@ -184,6 +189,26 @@ local function DroneApproachingRocket(drone)
   end -- if drone.s_request
   return false
 end -- function DroneApproachingRocket(drone)
+
+
+local function BLRchangePinHint(rocket, change)
+  local newPinHint = T{StringIdBase + 90, "<center><left_click> Place Rocket<newline>Ctrl+<left_click> Travel to another location"}
+  if change then 
+    rocket.pin_rollover_hint = newPinHint
+  else
+    rocket.pin_rollover_hint = g_Classes.LanderRocketBase.pin_rollover_hint
+  end
+end -- BLRchangePinHint(rocket)
+
+
+-- calculate and convert the time
+local function BLRconvertDateTime(currentTime)
+  local deltaTime = currentTime 
+  local sol    = (deltaTime / const.DayDuration)
+  local hour   = ((deltaTime % const.DayDuration) / const.HourDuration)
+  local minute = ((deltaTime % const.DayDuration) % const.HourDuration) / const.MinuteDuration
+  return string.format("%s Sols %02d Hours  %02d Minutes", sol, hour, minute)
+end -- BLRconvertDateTime()
 
 
 --------------------------------------------------------------------------------------------------
@@ -276,6 +301,81 @@ end -- OnMsg.ClassesBuilt()
 -----------------------------------------------------------------------------------------------------
 
 function OnMsg.ClassesGenerate()
+
+
+  -- new function
+  -- add BLR pin Thread
+  function LanderRocketBase:BLRaddPinChangeThread()
+    if IsValidThread(self.BLR_pinThread) then DeleteThread(self.BLR_pinThread) end 
+    self.BLR_pinThread = CreateRealTimeThread(function(rocket)
+      BLRchangePinHint(rocket, true)
+      while IsValid(rocket) and rocket.command == "WaitInOrbit" do
+        Sleep(500)
+      end -- while
+      BLRchangePinHint(rocket, false)
+    end, self) -- thread    
+  end -- LanderRocketBase:BLRaddPinChangeThread()
+  
+  
+  local Old_LanderRocketBase_WaitInOrbit = LanderRocketBase.WaitInOrbit
+  function LanderRocketBase:WaitInOrbit(arrive_time)
+    if not g_BLR_Options.modEnabled then return Old_LanderRocketBase_WaitInOrbit(self, arrive_time) end -- short circuit
+    
+    self:BLRaddPinChangeThread()
+    
+    RocketBase.WaitInOrbit(self, arrive_time or GameTime() or false)
+  end -- LanderRocketBase:WaitInOrbit(arrive_time)
+  
+
+  -- rewrite from LanderRocketBase.lua
+  -- intercept pin click to offer alternate travel options
+  function LanderRocketBase:OnPinClicked(gamepad)
+    if not g_BLR_Options.modEnabled then return RocketBase.OnPinClicked(self, gamepad) end -- short circuit
+    if IsMassUIModifierPressed() then 
+      CreateRealTimeThread(function(rocket)
+        local params  = {title = "Travel to Another Location", image = "UI/Messages/asteroid_view_of_mars.tga", start_minimized = false}
+        local choices = {}
+        local choice  = false
+        local locations = {}
+        local hasFuel = rocket.cargo.Fuel.amount >= 15
+        local currentLocation = rocket.city and rocket.city.map_id or ""
+        if hasFuel then
+          params.text = "You have enough fuel to travel to:"
+          if currentLocation ~= HomeColonySpot().map then 
+            locations[#locations+1] = {spot = HomeColonySpot() , name = "Back to Mars", timeleft = ""}
+            choices[#choices+1] = "Back to Mars"
+          end -- if currentLocation
+          local asteroids = UIColony.asteroids or empty_table
+          for i = 1, #asteroids do
+            if currentLocation ~= asteroids[i].map then 
+              locations[#locations+1] = {spot = asteroids[i].poi , name = asteroids[i].poi.display_name, timeleft = BLRconvertDateTime(asteroids[i].end_time - GameTime())} 
+              choices[#choices+1] = asteroids[i].poi.display_name .. " - Time Left: " .. BLRconvertDateTime(asteroids[i].end_time - GameTime())
+            end -- if currentLocation
+          end -- for i
+          choices[#choices+1] = "Cancel"
+          for i, choice in ipairs(choices) do
+            params["choice" .. i] = choice
+          end -- for i,
+          choice = WaitPopupNotification(false, params)
+          
+          if locations[choice] then
+            rocket.cargo.Fuel.amount = rocket.cargo.Fuel.amount - 15
+            rocket.target_spot = locations[choice].spot
+            rocket:SetCommand("FlyToSpot", locations[choice].spot)
+            if lf_print then print("Choice: ", choice, " Location: ", _InternalTranslate(locations[choice].name), " MapID: ", locations[choice].spot.map) end
+          end -- if choices[choice]
+        else
+          params.text    = "Rocket does not have enough fuel in the cargo hold for another journey.<newline>Minimum 15 units required."
+          params.choice1 = "Cancel"
+          choice = WaitPopupNotification(false, params)
+        end -- if hasFuel
+      end, self) -- CreateRealTimeThread
+
+      return true -- no infopanel popup
+    end
+    return RocketBase.OnPinClicked(self, gamepad)
+  end -- RocketBase:OnPinClicked(gamepad)
+  
   
   -- new function to prevent CTD and lockup when colonists are on mars
   -- yeah they try to call a shuttle.  duh.
@@ -301,7 +401,7 @@ function OnMsg.ClassesGenerate()
           -- send them home
           rocket.target_spot = HomeColonySpot()
           rocket.cargo.Fuel.amount = rocket.cargo.Fuel.amount - 15
-          rocket:TransferToMap(HomeColonySpot().map)
+          rocket:TransferToMap(HomeColonySpot().map) -- have to do this now otherwise assets get DoneObject on asteriod demolish
           rocket:SetCommand("FlyToSpot", HomeColonySpot())
           Sleep(100) -- just in case
         end -- orbiting_rocket
