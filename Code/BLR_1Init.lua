@@ -174,6 +174,18 @@ function BLRcheatSpawnAsteroid()
 end -- BLRcheatSpawnAsteroid()
 
 
+-- copy from CargoTransporter.lua
+local function DroneApproachingRocket(drone)
+  if drone.s_request then
+    local target_building = drone.s_request:GetBuilding()
+    if IsKindOf(target_building, "RocketBase") and table.find(target_building.drones_entering, drone) then
+      return true
+    end -- if IsKindOf
+  end -- if drone.s_request
+  return false
+end -- function DroneApproachingRocket(drone)
+
+
 --------------------------------------------------------------------------------------------------
 
 -- just in case they load this mod and dont have the B&B DLC
@@ -417,6 +429,10 @@ function OnMsg.ClassesGenerate()
     
     for idx, d in ipairs(found_drones or empty_table) do
       if not dronefilter(d) then       -- if the drone was found it fine 
+        if DroneApproachingRocket(d) then
+          local rocket = drone.s_request:GetBuilding()
+          table.remove_entry(rocket.drones_entering, d)
+        end -- if DroneApproachingRocket(d)   
         d:DropCarriedResource()        -- in case they are delivering something
         local controller = d.command_center
         d:DespawnNow()
@@ -425,7 +441,7 @@ function OnMsg.ClassesGenerate()
         d.init_with_command = false
         d:SetCommandCenter(controller)
         found_drones[idx] = d
-      end -- if not
+      end -- if not dronefilter(d)
     end -- for idx
     
     for _, drone in ipairs(found_drones) do
@@ -666,7 +682,7 @@ function OnMsg.ClassesGenerate()
   -- used to add some code to stop the forever while loop when a rocket launch is cancelled
   local Old_CargoTransporter_Load = CargoTransporter.Load
   function CargoTransporter:Load(manifest, quick_load)
-    if not g_BLR_Options.modEnabled then return Old_CargoTransporter_Load(self, manifest, quick_load) end -- short circuit
+    if not g_BLR_Options.modEnabled or (not IsKindOf(self, "LanderRocketBase")) then return Old_CargoTransporter_Load(self, manifest, quick_load) end -- short circuit
     if lf_print then print("CargoTransporter:Find running") end
     
     self.boarding = {}
@@ -693,20 +709,15 @@ function OnMsg.ClassesGenerate()
     drones = drones or empty_table
     crew = crew or empty_table
     prefabs = prefabs or empty_table
+    
     for _, rover in pairs(rovers) do
-      if IsKindOf(self, "LanderRocketBase") then 
-        self:BLRExpeditionLoadRover(rover)
-      else
-        self:ExpeditionLoadRover(rover)
-      end -- if IsKindOf
+      self:BLRExpeditionLoadRover(rover)
       SetCargoAmount(self.cargo, rover.class, 1)
     end -- for _
-    if IsKindOf(self, "LanderRocketBase") then 
-      self:BLRExpeditionLoadDrones(drones, quick_load)
-    else
-      self:ExpeditionLoadDrones(drones, quick_load)
-    end -- if IsKindOf
+
+    self:BLRExpeditionLoadDrones(drones, quick_load)
     SetCargoAmount(self.cargo, "Drone", #drones)
+    
     self:ExpeditionLoadCrew(crew)
     for _, member in pairs(crew) do
       if member.traits.Tourist then
@@ -715,6 +726,7 @@ function OnMsg.ClassesGenerate()
         SetCargoAmount(self.cargo, member.specialist, 1)
       end
     end -- for _
+    
     for _, prefab in pairs(prefabs) do
       SetCargoAmount(self.cargo, prefab.class, prefab.amount)
       self.city:AddPrefabs(prefab.class, -prefab.amount, false)
@@ -729,7 +741,7 @@ function OnMsg.ClassesGenerate()
   -- called from CargoTransporter:Load(manifest, quick_load) or LanderRocketBase:Load(manifest, quick_load)
   local Old_CargoTransporter_Find = CargoTransporter.Find
   function CargoTransporter:Find(manifest, quick_load)
-    if not g_BLR_Options.modEnabled then return Old_CargoTransporter_Find(self, manifest, quick_load) end -- short circuit
+    if not g_BLR_Options.modEnabled or (not IsKindOf(self, "LanderRocketBase")) then return Old_CargoTransporter_Find(self, manifest, quick_load) end -- short circuit
     if lf_print then print("CargoTransporter:Find running") end
     
     local rovers = {}
@@ -737,11 +749,9 @@ function OnMsg.ClassesGenerate()
       if lf_print then print("Find using BLRExpeditionFindRovers function") end
       local new_rovers = {}
       -- call new function for LanderRocketBase and never call any function if count is zero
-      if IsKindOf(self, "LanderRocketBase") and count > 0 then
+      if count > 0 then
         new_rovers = self:BLRexpeditionFindRovers(rover_type, quick_load, count) or empty_table
-      elseif count > 0 then
-        new_rovers = self:ExpeditionFindRovers(rover_type, quick_load, count) or empty_table
-      end -- if IsKindOf
+      end -- if count > 0
       if not quick_load and count > #new_rovers then
         return false
       end
@@ -750,30 +760,21 @@ function OnMsg.ClassesGenerate()
     
     local drones = {}
     if manifest.drones > 0 then
-      
-      if IsKindOf(self, "LanderRocketBase") then
-        if lf_print then print("Find using BLRExpeditionFindDrones function") end
-        drones = self:BLRexpeditionFindDrones(manifest.drones, quick_load) or empty_table
-      else
-        if lf_print then print("Find using legacy ExpeditionFindDrones function") end
-        drones = self:ExpeditionFindDrones(manifest.drones, quick_load) or empty_table
-      end -- if IsKindOf
+      if lf_print then print("Find using BLRExpeditionFindDrones function") end
+      drones = self:BLRexpeditionFindDrones(manifest.drones, quick_load) or empty_table
       
       if not quick_load and #drones < manifest.drones then
         return false
-      end
+      end -- if not
     end -- if manifest.drones
     
     local crew = {}
     for specialization, count in pairs(manifest.passengers) do
       local new_crew = {}
-      if IsKindOf(self, "LanderRocketBase") and count > 0 then
+      if count > 0 then
         if lf_print then print(string.format("Searching for %d %s", count, specialization)) end
         new_crew = self:BLRexpeditionGatherCrew(count, specialization, quick_load) or empty_table
-      elseif count > 0 then
-        if lf_print then print("Find using legacy ExpeditionGatherCrew function") end
-        new_crew = self:ExpeditionGatherCrew(count, specialization, quick_load) or empty_table
-      end -- if IsKindOf
+      end -- if count > 0
       if not quick_load and count > #new_crew then
         return false
       end

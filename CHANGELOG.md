@@ -1,4 +1,20 @@
 # Better Lander Rockets
+## [v1.0.1] 10/11/21 7:18:25 PM
+#### Changed
+- CargoTransporter:BLRExpeditionLoadDrones(found_drones, quick_load)  - added DroneApproachingRocket function
+
+#### Added
+-- local function DroneApproachingRocket(drone) 
+
+#### Fixed Issues
+- Stepping on expedition rocket code, so now completely excluded
+- crash when loading drones that are on entrance ramp of another rocket.
+
+#### Todo
+- prefab buttons
+- send rocket home function
+
+--------------------------------------------------------
 ## [v1.0] 10/04/21 12:55:47 AM
 
 Initial Release
