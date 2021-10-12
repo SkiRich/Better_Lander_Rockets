@@ -1,4 +1,17 @@
 # Better Lander Rockets
+## [v1.1.0] 10/12/21 4:28:14 AM
+#### Changed
+- BLRfixLanderRockets() added pin add routine to rocket fixups
+
+#### Added
+- Asteroid Hopping mechanics new function
+- function BLRchangePinHint(rocket, change)  new function
+- function BLRconvertDateTime(currentTime)  new function
+- function LanderRocketBase:BLRaddPinChangeThread()  new function
+- function LanderRocketBase:OnPinClicked(gamepad) - rewrite to incept pin mechanics
+
+
+--------------------------------------------------------
 ## [v1.0.1] 10/11/21 7:18:25 PM
 #### Changed
 - CargoTransporter:BLRExpeditionLoadDrones(found_drones, quick_load)  - added DroneApproachingRocket function
