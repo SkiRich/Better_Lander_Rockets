@@ -1,4 +1,25 @@
 # Better Lander Rockets
+## [v1.2] 10/13/21 3:35:59 AM
+#### Changed
+- StringIdBase numbers, added 100
+- function BLRsetRollOverText(rocket) - added code to display the issues we collect
+- added issues collction logic to panels via setrollover
+- function BLRfindResourceIssues(rocket)  - added issues collection logic
+- BLRfindCargoIssues(rocket) - added issues collection logic
+- BLRfindCrewIssues(rocket) - added issues collection logic
+- better fonts in rolloverhint
+
+#### Added
+- rocket:StopDepartureThread() on fixup rockets
+- function LanderRocketBase:CancelFlight() to properly cancel a rocket launch
+- function OnMsg.RocketLaunchFromEarth(rocket) - change auto load when purchasing a rocket
+
+#### Fixed Issues
+- rockets not cancelling properly
+- running out of StringIdNumbers
+- Tourists still sneaking onto rockets
+
+--------------------------------------------------------
 ## [v1.1.1] 10/12/21 5:08:38 PM
 #### Changed
 - CargoTransporter:BLRExpeditionLoadDrones(found_drones, quick_load) 

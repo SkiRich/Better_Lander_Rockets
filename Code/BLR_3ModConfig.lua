@@ -8,7 +8,7 @@
 local lf_print = false -- Setup debug printing in local file
                        -- Use if lf_print then print("something") end
 
-local StringIdBase = 17764706000 -- Better Lander Rockets    : 706000 - 706099  This File Start 0-29, Next: 8
+local StringIdBase = 17764706000 -- Better Lander Rockets    : 706000 - 706199  This File Start 0-49, Next: 8
 local mod_name = "Better Lander Rockets"
 local steam_id = "2619013940"
 local TableFind  = table.find
