@@ -14,7 +14,7 @@ local mod_name = "Better Lander Rockets"
 local table = table
 local IsValidPos  = CObject.IsValidPos
 
-local StringIdBase  = 17764706000 -- Better Lander Rockets    : 706000 - 706099  This File Start 90-99, Next: 90
+local StringIdBase  = 17764706000 -- Better Lander Rockets    :  706000 - 706199  This File Start 50-99, Next: 51
 local enforceFilter = false -- enforce filtering in GetAvailableColonistsForCategory 
 
 -- options for Better Lander Rockets Mod
@@ -153,6 +153,9 @@ local function BLRfixLanderRockets()
     -- add pin hint thread to waiting rockets
     if rocket.command == "WaitInOrbit" then rocket:BLRaddPinChangeThread() end
     
+    -- stop any departure threads
+    rocket:StopDepartureThread() -- no tourists or earthsick sneak on
+    
   end -- for _, rocket
   
   -- extend time for asteroids with rockets on them that didnt get the extension
@@ -192,7 +195,7 @@ end -- function DroneApproachingRocket(drone)
 
 
 local function BLRchangePinHint(rocket, change)
-  local newPinHint = T{StringIdBase + 90, "<center><left_click> Place Rocket<newline>Ctrl+<left_click> Travel to another location"}
+  local newPinHint = T{StringIdBase + 50, "<center><left_click> Place Rocket<newline>Ctrl+<left_click> Travel to another location"}
   if change then 
     rocket.pin_rollover_hint = newPinHint
   else
@@ -301,6 +304,18 @@ end -- OnMsg.ClassesBuilt()
 -----------------------------------------------------------------------------------------------------
 
 function OnMsg.ClassesGenerate()
+  
+  
+  -- rewrite from LanderRocketBase
+  -- original does not zero out both target_spot and requested_spot
+  -- rocket also not in WaitLaunchOrder
+  local Old_LanderRocketBase_CancelFlight = LanderRocketBase.CancelFlight
+  function LanderRocketBase:CancelFlight()
+    if not g_BLR_Options.modEnabled then return Old_LanderRocketBase_CancelFlight(self) end -- short circuit
+    self.target_spot = false
+    self.requested_spot = false
+    self:SetCommand("WaitLaunchOrder")
+  end -- LanderRocketBase:CancelFlight()
 
 
   -- new function
@@ -1040,11 +1055,15 @@ function OnMsg.SpawnedAsteroid(asteroid)
 end -- OnMsg.SpawnedAsteroid(asteroid)
 
 
--- on rocket built on mars
+-- on rocket built on mars disable auto load
 function OnMsg.ConstructionComplete(rocket)
   if IsKindOf(rocket, "LanderRocketBase") then rocket.auto_load_enabled = false end
 end -- OnMsg.ConstructionComplete(rocket)
 
+
+function OnMsg.RocketLaunchFromEarth(rocket)
+  if IsKindOf(rocket, "LanderRocketBase") then rocket.auto_load_enabled = false end
+end -- OnMsg.RocketLaunchFromEarth(rocket)
 
 
 function OnMsg.ToggleLFPrint(modname, lfvar)
