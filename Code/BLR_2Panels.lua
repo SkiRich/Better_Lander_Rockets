@@ -9,8 +9,9 @@ local lf_printc       = false  -- print for classes that are chatty
 local lf_printDebug   = false
 
 
-local StringIdBase = 17764706000 -- Better Lander Rockets    : 706000 - 706199  This File Start 100-199, 180-199 reserved for texts, Next: 134
+local StringIdBase = 17764706000 -- Better Lander Rockets    : 706000 - 706199  This File Start 100-199, 180-199 reserved for texts, Next: 138
 local ModDir   = CurrentModPath
+local iconEPFButton = ModDir.."UI/Icons/buttonBLR.png"
 local mod_name = "Better Lander Rockets"
 local iconBLRSection  = ModDir.."UI/Icons/BLRSection.png"
 
@@ -33,15 +34,16 @@ local function BLRsetRollOverText(rocket)
   texts[3] = T{StringIdBase + 102, "<em>Cargo issues</em> = Problems with requested cargo. Only drones rovers and prefabs are considered cargo."}
   texts[4] = T{StringIdBase + 103, "<em>Drone issues</em> = Problems with drones."}
   texts[5] = T{StringIdBase + 104, "<em>Resource issues</em> = Problems gathering resources on the planet or asteroid."}
+  texts[6] = T{StringIdBase + 105, "<em>Crew issues</em> = Problems with crew."}
   
   local issues = (rocket and (rocket.BLR_resIssues or rocket.BLR_crewIssues or rocket.BLR_cargoIssues)) or empty_table
   local dest = rocket and (rocket.target_spot or rocket.requested_spot)
   if #issues > 0 then
     local vicinity = (ObjectIsInEnvironment(rocket, "Asteroid") and "On Asteroid: ") or "On Mars: "
-    texts[6] = (dest and T{StringIdBase + 105, "<newline><em>Launch Issues Reported:</em>"}) or T{StringIdBase + 106, "<newline><em>Potential Launch Issues:</em>"}
+    texts[7] = (dest and T{StringIdBase + 106, "<newline><em>Launch Issues Reported:</em>"}) or T{StringIdBase + 107, "<newline><em>Potential Launch Issues:</em>"}
     for i = 1, #issues do
       -- {item = payload.class, requested = payload.requested, onplanet = (RoundDownResAmtScaled(stock[item]) - RocketStock(item)), onrockets = RocketStock(item)}
-      texts[i+6] = T{StringIdBase + 179+i, string.format("<em>Item:</em> %s, <em>Requested:</em> %d, <em>%s</em>%d, <em>On Rockets:</em> %d", issues[i].item, issues[i].requested, vicinity, issues[i].onplanet, issues[i].onrockets)}
+      texts[i+7] = T{StringIdBase + 179+i, string.format("<em>Item:</em> %s, <em>Requested:</em> %d, <em>%s</em>%d, <em>On Rockets:</em> %d", issues[i].item, issues[i].requested, vicinity, issues[i].onplanet, issues[i].onrockets)}
     end -- for i
   end -- if rocket.BLR_issues
   
@@ -76,10 +78,10 @@ local function BLRfindResourceIssues(rocket)
   end -- for _, payload 
   if #issues > 0 then
     rocket.BLR_resIssues = issues
-    return issues, T{StringIdBase + 107, "Not Enough"}  
+    return issues, T{StringIdBase + 108, "Not Enough"}  
   end -- if #issues > 0
   rocket.BLR_resIssues = nil
-  return false, T{StringIdBase + 108, "None"}
+  return false, T{StringIdBase + 109, "None"}
 end -- BLRfindResourceIssues(rocket)
 
 
@@ -101,15 +103,15 @@ local function BLRfindCargoIssues(rocket)
     end -- for _,
     if dest and cargofail then 
       rocket.BLR_cargoIssues = issues
-      return issues, T{StringIdBase + 109, "Cargo missing"} 
+      return issues, T{StringIdBase + 110, "Cargo missing"} 
     end -- if dest
     if #issues > 0 then
       rocket.BLR_cargoIssues = issues
-      return issues, T{StringIdBase + 110, "Cargo Not Loaded"} 
+      return issues, T{StringIdBase + 111, "Cargo Not Loaded"} 
     end -- if #issues
   end -- not rocket:GetCargoLoadingStatus()
   rocket.BLR_cargoIssues = nil
-  if rocket:GetCargoLoadingStatus() == "loading" then return false, T{StringIdBase + 111, "Cargo requested"} end
+  if rocket:GetCargoLoadingStatus() == "loading" then return false, T{StringIdBase + 112, "Cargo requested"} end
   return false, T{StringIdBase + 5108, "None"}
 end -- BLRfindCargoIssues(rocket)
 
@@ -145,7 +147,7 @@ local function BLRfindDroneIssues(rocket)
   end -- not rocket:GetCargoLoadingStatus()
 
   if rocket:GetCargoLoadingStatus() == "loading" then return T{StringIdBase + 117, "Drones requested"} end
-  return T{StringIdBase + 108, "None"}
+  return T{StringIdBase + 109, "None"}
 end -- BLRfindDroneIssues(rocket)
 
 -- function to find any crew issues on the rocket when loading
@@ -201,7 +203,8 @@ function OnMsg.ClassesBuilt()
   local ObjModified = ObjModified
   local PlaceObj = PlaceObj
   local BLRSectionID1 = "BLRSection-01"
-  local BLRControlVer = "120"
+  local BLRbuttonID1  = "BLRbutton-01"
+  local BLRControlVer = "130"
   local XT
 
   if lf_print then print("Loading Classes in BLR_2Panels.lua") end  
@@ -211,8 +214,8 @@ function OnMsg.ClassesBuilt()
   if XT.BLR then
     if lf_print then print("Retro Fit Check BLR buttons and panels in customLanderRocket") end
     for i, obj in pairs(XT or empty_table) do
-      if type(obj) == "table" and obj.__context_of_kind == "LanderRocketBase" and (
-       obj.UniqueID == BLRSectionID1 ) and
+      if type(obj) == "table" and obj.__context_of_kind == "LanderRocketBase" and 
+       ((obj.UniqueID == BLRSectionID1 ) or (obj.UniqueID == BLRbuttonID1)) and
        obj.Version ~= BLRControlVer then
         table.remove(XT, i)
         if lf_print then print("Removed old BLR buttons and panels from customLanderRocket") end
@@ -290,11 +293,43 @@ function OnMsg.ClassesBuilt()
               end, -- OnContextUpdate
             }),
          }), -- end of idATstatusSection
-    
-
-
       }) -- End PlaceObject XTemplate
     ) -- table.insert
+    
+    XT[#XT + 1] = PlaceObj("XTemplateTemplate", {
+      "Version", BLRControlVer,
+      "UniqueID", BLRbuttonID1,
+      "Id", "idEPFbutton",
+      "__context_of_kind", "LanderRocketBase",
+      "__condition", function (parent, context) 
+          return g_BLR_Options.modEnabled and (not context.demolishing) and (not context.destroyed)                 
+        end,
+      "__template", "InfopanelButton",
+      "Icon", iconEPFButton,
+      "RolloverTitle", T{StringIdBase + 134, "Better Lander Rockets"}, -- Title Used for sections only
+      "RolloverText", T{StringIdBase + 135, "Unpack an existing Drone Prefab to build a new Drone.<newline>Pack an existing drone back into a prefab.<newline><newline><em>Available Drone Prefabs: </em><drone(surface_drone_prefabs)><newline>"},
+      "RolloverHint", T{StringIdBase + 136, "<left_click> Unpack 1 drone.    Ctrl+<left_click> Unpack 5 drones.<newline><right_click> Pack 1 drone.    Ctrl+<right_click> Pack 5 drones."},
+      "RolloverDisabledText", T{StringIdBase + 137, "Disabled"},
+      "OnContextUpdate", function(self, context)
+        if (not context:IsRocketLanded()) or context:IsDeparting() then
+          self:SetEnabled(false)
+        else
+          self:SetEnabled(true)
+        end -- if
+      end, -- OnContextUpdate
+      "OnPress", function(self, gamepad)
+        PlayFX("DomeAcceptColonistsChanged", "start", self.context)
+        self.context:UseDronePrefab(not gamepad and IsMassUIModifierPressed())
+        ObjModified(self.context)
+      end, -- OnPress 
+			'AltPress', true, 
+			'OnAltPress', function (self, gamepad) 
+         PlayFX("DomeAcceptColonistsChanged", "start", self.context) 
+         self.context:ConvertDroneToPrefab(not gamepad and IsMassUIModifierPressed())
+         ObjModified(self.context)
+      end -- OnAltpress 
+    }) -- end PlaceObject xtemplate 
+    
   end -- if not XT.BLR
   
 end -- OnMsg.ClassesBuilt()
