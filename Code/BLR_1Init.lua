@@ -2,7 +2,7 @@
 -- Author @SkiRich
 -- All rights reserved, duplication and modification prohibited.
 -- Created Sept 20th, 2021
--- Updated Oct 12th, 2021
+-- Updated Oct 14th, 2021
 
 
 local lf_print        = false  -- Setup debug printing in local file -- use Msg("ToggleLFPrint", "BLR", "printdebug") to toggle
@@ -56,55 +56,6 @@ local function adultfilter(_, c)
 end -- adultfilter
 
 
--- OnAction function replacement since the original xTemplate version is busted
--- replaced by function LanderRocketBase:UIEditPayloadRequest() below
--- from PayloadRequest.lua
-local BLRonAction = function(self, host, source)
-  local obj = host.parent.context.object
-  local cargo = obj.cargo
-  local passenger_manifest = host.context.traits_object.approved_per_trait or empty_table
-  local set_cargo_request_cb = function()
-    obj.target_spot = obj.requested_spot or obj.target_spot
-    obj.requested_spot = false
-    obj:SetCargoRequest(g_RocketCargo, passenger_manifest)
-  end
-  local reset_cargo_request_cb = function()
-    obj.cargo = cargo
-  end
-  local requested_cargo = 0
-  local requested_passengers = 0
-  table.foreachi_value(g_RocketCargo, function(v)
-    requested_cargo = requested_cargo + v.amount
-  end)
-  table.foreach_value(passenger_manifest, function(v)
-    requested_passengers = requested_passengers + v
-  end)
-  CreateRealTimeThread(function()
-    local res
-    local target_spot = obj.target_spot or obj.requested_spot -- fixed
-    if requested_cargo == 0 and requested_passengers == 0 then
-      res = WaitPopupNotification("LaunchIssue_CargoEmpty", {}, false, terminal.desktop)
-    elseif obj.requested_spot and (requested_passengers > 0) and (not ObjectIsInEnvironment(obj, "Asteroid"))then
-      if not obj.requested_spot.asteroid.available then
-        res = WaitPopupNotification("LaunchIssue_AsteroidHabitat", {
-          number1 = requested_passengers,
-          number2 = BuildingTemplates.MicroGHabitat.capacity
-        }, false, terminal.desktop)
-      elseif requested_passengers > GetAvailableResidences(Cities[target_spot.map]) then -- fixed
-        res = WaitPopupNotification("LaunchIssue_AsteroidHabitatRepeat", {
-          number1 = requested_passengers,
-          number2 = GetAvailableResidences(Cities[obj.requested_spot.map])
-        }, false, terminal.desktop)
-      end
-    end
-    if not res or res == 1 then
-      set_cargo_request_cb()
-    else
-      reset_cargo_request_cb()
-    end
-  end, self)
-  CloseDialog("PayloadRequest")
-end -- OnAction function replacement BLRonAction
 
 -- extend asteroid linger time
 local function BLRextendAsteroidTime(rocket)
@@ -155,6 +106,9 @@ local function BLRfixLanderRockets()
     
     -- stop any departure threads
     rocket:StopDepartureThread() -- no tourists or earthsick sneak on
+        
+    -- fix cargo
+    rocket:BLRfixCargoAnomolies()
     
   end -- for _, rocket
   
@@ -184,7 +138,7 @@ end -- BLRcheatSpawnAsteroid()
 
 -- copy from CargoTransporter.lua
 local function DroneApproachingRocket(drone)
-  if drone.s_request then
+  if drone and drone.s_request then
     local target_building = drone.s_request:GetBuilding()
     if IsKindOf(target_building, "RocketBase") and table.find(target_building.drones_entering, drone) then
       return true
@@ -194,6 +148,7 @@ local function DroneApproachingRocket(drone)
 end -- function DroneApproachingRocket(drone)
 
 
+-- function to put custom hint text or return to vanilla
 local function BLRchangePinHint(rocket, change)
   local newPinHint = T{StringIdBase + 50, "<center><left_click> Place Rocket<newline>Ctrl+<left_click> Travel to another location"}
   if change then 
@@ -212,6 +167,8 @@ local function BLRconvertDateTime(currentTime)
   local minute = ((deltaTime % const.DayDuration) % const.HourDuration) / const.MinuteDuration
   return string.format("%s Sols %02d Hours  %02d Minutes", sol, hour, minute)
 end -- BLRconvertDateTime()
+
+
 
 
 --------------------------------------------------------------------------------------------------
@@ -241,12 +198,14 @@ function OnMsg.ClassesBuilt()
   end -- TraitsObject:GetAvailableColonistsForCategory(city, category)
 
 
-
+  -- rewrite from LanderRocketBase
+  -- Interecpt call for opening payload dialog so can play along
   local Old_LanderRocketBase_UIEditPayloadRequest = LanderRocketBase.UIEditPayloadRequest
   function LanderRocketBase:UIEditPayloadRequest()
     if not g_BLR_Options.modEnabled then return Old_LanderRocketBase_UIEditPayloadRequest(self) end -- short circuit
     if lf_printd then print("-- g_BLR_PayloadRequest_Thread Function started --") end
     
+    self:BLRfixCargoAnomolies() -- fix any cargo anomolies
     
     enforceFilter = not ObjectIsInEnvironment(self, "Asteroid") -- enforce filter on Mars only in GetAvailableColonistsForCategory
     self.prefab_count_fail = false -- reset this here since Find only runs when target set
@@ -271,10 +230,11 @@ function OnMsg.ClassesBuilt()
         local modEnabled = g_BLR_Options.modEnabled
         -- run replacement loop when back on items screen only
         while modEnabled and host.idContent do
-          -- devs removed offending code so no need to replace this.  Not used but keeping loop for enforceFilter
+          -- devs removed offending code so no need to replace this.  Not used but keeping loop for enforceFilter and example
+          -- moved replaced code from this file into file called UnUsed_LuaCode.lua
           -- if host.idContent.idToolBar.idrequest then
-          -- host.idContent.idToolBar.idrequest.action.OnAction = BLRonAction
-          --end -- if mode
+          --   host.idContent.idToolBar.idrequest.action.OnAction = BLRonAction
+          -- end -- if mode
           Sleep(100)
         end -- while
         
@@ -304,6 +264,120 @@ end -- OnMsg.ClassesBuilt()
 -----------------------------------------------------------------------------------------------------
 
 function OnMsg.ClassesGenerate()
+
+  
+  
+  -- new function
+  -- check for cargo anamolies, because shit happened
+  function LanderRocketBase:BLRfixCargoAnomolies()
+    local cargo = self.cargo or empty_table
+    local stock = self.stockpiled_amount or empty_table
+    
+    -- fix the cargo
+    for item, payload in pairs(cargo) do
+      if payload.amount < 0 then payload.amount = 0 end  
+    end -- for item
+    
+    -- fix the stockpile
+    for item, amount in pairs(stock) do
+      if amount < 0 then self:AddResource((amount * -1), item) end  -- needed to do it this way
+    end -- for item
+  end -- LanderRocketBase:BLRfixCargoAnomolies()
+  
+  
+  -- new function
+  -- determine what cargo is being requested
+  function LanderRocketBase:BLRgetCargoRequested()
+    local cargoRequested = {}
+    for _, entry in pairs(self.cargo) do
+      if entry.amount < entry.requested then
+        table.insert(cargoRequested, entry)
+      end -- if
+    end -- for
+    return cargoRequested
+  end -- LanderRocketBase:BLRgetCargoRequested()
+ 
+ 
+  -- new function, copy of ancestor so we can properly convert drones to prefabs
+  local Old_LanderRocketBase_ConvertDroneToPrefab = LanderRocketBase.ConvertDroneToPrefab
+  function LanderRocketBase:ConvertDroneToPrefab(bulk)
+    if not g_BLR_Options.modEnabled  then return Old_LanderRocketBase_ConvertDroneToPrefab(self, bulk) end -- short circuit
+    bulk = bulk and 5 or 1
+    while bulk > 0 do
+      local drone = self:FindDroneToConvertToPrefab()
+      if drone then
+        if drone.demolishing then
+          drone:ToggleDemolish()
+        end
+        drone.can_demolish = false
+        table.remove_entry(self.drones, drone)
+        SelectionArrowRemove(drone)
+        drone:DropCarriedResource()
+        if DroneApproachingRocket(drone) then
+          local rocket = drone.s_request:GetBuilding()
+          table.remove_entry(rocket.drones_entering, drone)
+        end -- if DroneApproachingRocket(d)
+        drone:DespawnNow()
+        self.city.drone_prefabs = self.city.drone_prefabs + 1
+      else
+        break
+      end -- if drone
+      bulk = bulk - 1
+    end -- while
+  end -- LanderRocketBase:ConvertDroneToPrefab(bulk) 
+   
+  
+  -- new function used in text display for RolloverText in xTemplate
+  function LanderRocketBase:Getsurface_drone_prefabs()
+    return UICity.drone_prefabs or 0
+  end -- LanderRocketBase:Getsurface_drone_prefabs()  
+
+
+  -- rewrite of ancestor from DroneControl.lua
+  -- original broken
+  -- missing spot indexes
+  local Old_LanderRocketBase_SpawnDrone = LanderRocketBase.SpawnDrone
+  function LanderRocketBase:SpawnDrone() 
+    if not g_BLR_Options.modEnabled  then return Old_LanderRocketBase_SpawnDrone(self) end -- short circuit
+    local drone = self.city:CreateDrone()
+    drone:SetHolder(self)
+    drone:SetCommandCenter(self)
+    CreateGameTimeThread(function(drone, rocket)
+      if IsValid(drone) then
+        local droneexit = rocket:GetSpotLoc(rocket:GetSpotBeginIndex(rocket.drone_spawn_spot)) 
+        drone:SetPos(droneexit)
+        CreateGameTimeThread(function()
+          rocket:LeadOut(drone)
+        end)
+        Sleep(2000)
+        drone:SetCommand("GoHome", nil, nil, droneexit, "ReturningToController")
+      end -- if IsValid
+    end, drone, self) -- thread
+    return drone    
+  end -- LanderRocketBase:SpawnDrone()
+
+  
+  -- rewrite of ancestor from DroneControl.lua
+  -- original broken
+  local Old_LanderRocketBase_UseDronePrefab = LanderRocketBase.UseDronePrefab
+  function LanderRocketBase:UseDronePrefab(bulk)
+    if not g_BLR_Options.modEnabled then return Old_LanderRocketBase_UseDronePrefab(self, bulk) end -- short circuit
+    bulk = bulk and 5 or 1
+    self.drones = self.drones or 0
+    local maxdrones = self:GetMaxDrones()
+    local prefabs = self.city.drone_prefabs or 0
+    CreateGameTimeThread(function(bulk, prefabs, rocket)
+      while bulk > 0 and prefabs > 0 and #rocket.drones < maxdrones do
+        local drone = rocket:SpawnDrone()
+        if drone then
+          rocket.city.drone_prefabs = rocket.city.drone_prefabs - 1
+          table.insert_unique(rocket.drones, drone)
+        end -- if drone
+        bulk = bulk - 1
+        Sleep(250)
+      end -- bulk > 0
+    end, bulk, prefabs, self) -- thread
+  end -- LanderRocketBase:UseDronePrefab(bulk)  
   
   
   -- rewrite from LanderRocketBase
@@ -332,6 +406,7 @@ function OnMsg.ClassesGenerate()
   end -- LanderRocketBase:BLRaddPinChangeThread()
   
   
+  -- rewrite from ancestor so we can intercept the command and start a thread.
   local Old_LanderRocketBase_WaitInOrbit = LanderRocketBase.WaitInOrbit
   function LanderRocketBase:WaitInOrbit(arrive_time)
     if not g_BLR_Options.modEnabled then return Old_LanderRocketBase_WaitInOrbit(self, arrive_time) end -- short circuit
@@ -399,7 +474,7 @@ function OnMsg.ClassesGenerate()
   end -- MicroGHabitat:GetNearestLandingSlot(ref_pos, ...)
 
 
-  --rewrite from Asteroids.lua
+  -- rewrite from Asteroids.lua
   -- intercept call and save orbiting rockets and rockets on their way to asteroid
   local Old_Asteroids_NotifyRocketsAsteroidMovingOutOfRange = Asteroids.NotifyRocketsAsteroidMovingOutOfRange
   function Asteroids:NotifyRocketsAsteroidMovingOutOfRange(asteroid)
@@ -465,12 +540,31 @@ function OnMsg.ClassesGenerate()
   end -- LanderRocketBase:IsLandedOnAsteroid()
 
 
+  -- new function
+  -- copy of ancestor.  They forgot unit
+  -- not putting in a short circuit
+  function LanderRocketBase:GetEntrance(target, entrance_type, spot_name, unit)
+    if not g_BLR_Options.modEnabled then return CargoTransporter.GetEntrancePoints(self, entrance_type, spot_name, unit) end
+    return WaypointsObj.GetEntrance(self, target, entrance_type or "rocket_entrance", spot_name or "openInside", unit)
+  end -- LanderRocketBase:GetEntrance(target, entrance_type, spot_name, unit)
+
+
+  -- new function
+  -- copy of ancestor.  They forgot self
+  -- not putting in a short circuit
+  function LanderRocketBase:GetEntrancePoints(entrance_type, spot_name)
+    if not g_BLR_Options.modEnabled then return CargoTransporter.GetEntrancePoints(self, entrance_type, spot_name) end
+    return WaypointsObj.GetEntrancePoints(self, entrance_type or "rocket_entrance", spot_name)
+  end -- LanderRocketBase:GetEntrancePoints(entrance_type, spot_name)
+
+  
+
   -- new function to replace ancestor
   -- fixes missing waypoints for entrances
   -- copy from CargoTransporter.lua
   function LanderRocketBase:GetEntrancePoint()
     if not g_BLR_Options.modEnabled then return CargoTransporter.GetEntrancePoint(self) end
-    if not self.waypoint_chains then self.waypoint_chains = GetEntityWaypointChains(self.entity) end
+    if not self.waypoint_chains or not self.waypoint_chains.rocket_entrance then self:BuildWaypointChains() end -- fix broken waypoints
     local entrance
     if not self.waypoint_chains then
       return entrance
@@ -527,12 +621,46 @@ function OnMsg.ClassesGenerate()
 
   -- from DroneBase
   -- This use to be DroneBase:CanBeControlled()  but they hosed that with a duplicate function of the same name
-  -- So putting  it the mod to see what the hell happens.
+  -- So putting it in the mod to see what the hell happens.
   local Old_DroneBase_CanBeControlled = DroneBase.CanBeControlled
   function DroneBase:CanBeControlled()
     if not g_BLR_Options.modEnabled then return Old_DroneBase_CanBeControlled(self) end -- short circuit
     return not self.control_override and self.command ~= "Malfunction" and self.command ~= "Dead" and not self.disappeared and not self:IsShroudedInRubble()
   end -- DroneBase:CanBeControlled()
+
+
+  -- new function to prevent using the ancestor
+  -- the ancestor duplicates the drones from the cargo
+  function LanderRocketBase:SpawnDronesFromEarth()
+    -- we dont need no stinkin drones from earth
+    -- purposely left blank to prevent the Unload command from generating drones during that call.
+    -- we'll make our own drones in UnLoadDrones()
+  end -- LanderRocketBase:SpawnDronesFromEarth()
+
+
+  -- new function to override ancestor
+  -- fix drones unloading from under rocket
+  local Old_CargoTransporter_UnloadDrones = CargoTransporter.UnloadDrones
+  function LanderRocketBase:UnloadDrones(drones)
+    DoneObjects(self.drones)
+    self.drones = {}
+    local amount = self.cargo.Drone and self.cargo.Drone.amount or 0
+    if lf_print then print("+++ Unloading Drones: ", amount) end
+    self.cargo.Drone.amount = 0 -- to prevent the unload cargo function from attempting to unload drones.
+    CreateGameTimeThread(function(rocket, amount)
+      while amount > 0 do
+        local drone = rocket:SpawnDrone()
+        if drone then
+          table.insert_unique(rocket.drones, drone)
+        else
+          ModLog("ERROR - Better Lander Rockets could not spawn drones during UnloadDrones")
+        end -- if drone
+        amount = amount - 1
+        Sleep(250)      
+      end -- while
+      Sleep(2000) -- wait to unload the rest of cargo
+    end, self, amount) -- thread
+  end -- LanderRocketBase:UnloadDrones(drones)
 
   
   -- new function
@@ -543,7 +671,7 @@ function OnMsg.ClassesGenerate()
     if lf_print then print("CargoTransporter:BLRExpeditionLoadDrones running") end
     
     for idx, d in ipairs(found_drones or empty_table) do
-      if not dronefilter(d) then       -- if the drone was found it fine 
+      if not dronefilter(d) then       -- if the drone was found it fine, otherwise lets rebuild it.
         if DroneApproachingRocket(d) then
           local rocket = drone.s_request:GetBuilding()
           table.remove_entry(rocket.drones_entering, d)
@@ -592,7 +720,6 @@ function OnMsg.ClassesGenerate()
   				break
   			end -- not drone
   			table.insert(found_drones, drone)
-  			Sleep(50) -- give this loop a break
   		end -- while
   		
   		if lf_print then 
@@ -678,11 +805,11 @@ function OnMsg.ClassesGenerate()
       -- idle any auto mode rovers
       if rover.auto_mode_on then
         rover.auto_mode_on = false
-        rover:SetCommand("Idle")
-        Sleep(100) -- Give it chance to work
       end -- if rover.auto_mode_on
       
+      rover:SetCommand(false)  -- set false here guarantees its not doing a thing and cannot be picked by another controller
       rover:SetHolder(self)
+      Sleep(100) -- Give it chance to work   
       rover:SetCommand("Disappear", "keep in holder")
     end -- if rover
   end -- CargoTransporter:BLRExpeditionLoadRover(rover)
@@ -694,7 +821,7 @@ function OnMsg.ClassesGenerate()
     if lf_print then print("CargoTransporter:BLRexpeditionFindRovers running") end
 
     local roverfilter = function(unit)
-      return (unit.class == class) and (not unit.holder) and ((unit:CanBeControlled() or quick_load or unit.command == "Idle"))
+      return (unit.class == class) and (not unit.holder) and ((unit:CanBeControlled() or (quick_load and not unit.holder) or unit.command == "Idle"))
     end -- roverfilter    
     
     local realm = GetRealm(self)
@@ -810,16 +937,29 @@ function OnMsg.ClassesGenerate()
           requested = 0,
           amount = 0
         }
-      end
+      end -- if not cargo
       cargo[class_id].amount = cargo[class_id].amount + amount
-    end
+    end -- local SetCargoAmount
     local succeed, rovers, drones, crew, prefabs = self:Find(manifest, quick_load)
     while not succeed and self:HasDestination() do  -- forever loop now canceled when destination is cancelled
       Sleep(1000)
       succeed, rovers, drones, crew, prefabs = self:Find(manifest, quick_load)
     end -- while
     
-    -- need to have empty_table here in case of cancellation
+    -- if short circuit then dont load anything
+    if not self:HasDestination() then
+      rovers, drones, crew, prefabs = {}, {}, {}, {}
+      rocket.drone_summon_fail = false
+      rocket.rover_summon_fail = false
+      rocket.prefab_count_fail = false
+      rocket.BLR_resIssues = nil
+      rocket.BLR_cargoIssues = nil
+      rocket.BLR_crewIssues = nil
+      rocket.colonist_summon_fail = false
+      return rovers, drones, crew, prefabs
+    end --  if not self:HasDestination()
+    
+    -- need to have empty_table here in case of nil
     rovers = rovers or empty_table
     drones = drones or empty_table
     crew = crew or empty_table

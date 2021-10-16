@@ -1,4 +1,49 @@
 # Better Lander Rockets
+## [v1.3] 10/13/21 11:09:21 PM
+#### New
+- Pack Unpack Drones on the rocket
+
+#### Changed
+- CargoTransporter:BLRExpeditionLoadRover(rover) using rover:SetCommand(false) instead of Idle
+- local roverfilter = function(unit)  added check for holder during quickload
+- function CargoTransporter:Load(manifest, quick_load)  added short circuit ini case we cancel flight.
+- DroneApproachingRocket(drone) nil check
+- function CargoTransporter:BLRExpeditionLoadRover(rover) - drone exit fix
+
+#### Added
+- function LanderRocketBase:Getsurface_drone_prefabs() 
+- function LanderRocketBase:SpawnDrone() 
+- function LanderRocketBase:ConvertDroneToPrefab(bulk) 
+- function LanderRocketBase:UseDronePrefab(bulk) 
+- added button and xtemplate for prefabs
+- function LanderRocketBase:GetEntrancePoints(entrance_type, spot_name) 
+- function LanderRocketBase:GetEntrance(target, entrance_type, spot_name) 
+- LanderRocketBase:BLRgetCargoRequested() new
+- LanderRocketBase:BLRfixCargoAnomolies() new
+- function LanderRocketBase:UnloadDrones(drones)
+- function LanderRocketBase:SpawnDronesFromEarth()
+
+#### Removed
+- removed local BLRonAction function - not used but placed into the unused code lua file in dir
+- function LanderRocketBase:BuildWaypointChains() not needed
+- function LanderRocketBase:BLRgetDroneExitPoint()  not needed
+- function LanderRocketBase:BuildWaypointChains() not needed
+- removed - check for waypoint_chains and fix if needed
+
+#### Fixed Issues
+- possible runaway or invalid condition when cancelling flight
+- possible cargo duplication when cancelling flight
+- No exit points defined for drone spawns
+- Drones not properly spawn with GoHome and no longer stack at the foot of the ramp.
+- Errors with taskrequests when packinig drones -- [LUA ERROR] HGE::Request_Fulfill: tr->m_nActualAmount - tr->m_nTargetAmount >= nAmount
+- Fixed negative cargo anomolies
+
+#### Todo
+- Manual Unload
+- Filter picks unemployed first
+- Short circuits
+
+--------------------------------------------------------
 ## [v1.2] 10/13/21 3:35:59 AM
 #### Changed
 - StringIdBase numbers, added 100
