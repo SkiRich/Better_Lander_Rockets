@@ -20,6 +20,9 @@
 - function LanderRocketBase:BLRgetDroneExitPoint() 
 - function LanderRocketBase:BuildWaypointChains() 
 - function LanderRocketBase:GetEntrance(target, entrance_type, spot_name) 
+- check for waypoint_chains and fix if needed
+- LanderRocketBase:BLRgetCargoRequested() new
+- LanderRocketBase:BLRfixCargoAnomolies() new
 
 #### Removed
 - removed local BLRonAction function - not used but placed into the unused code lua file in dir
@@ -30,6 +33,7 @@
 - No exit points defined for drone spawns
 - Drones not properly spawn with GoHome and no longer stack at the foot of the ramp.
 - Errors with taskrequests when packinig drones -- [LUA ERROR] HGE::Request_Fulfill: tr->m_nActualAmount - tr->m_nTargetAmount >= nAmount
+- Fixed negative cargo anomolies
 
 #### Todo
 - Manual Unload
