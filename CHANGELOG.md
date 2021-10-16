@@ -17,15 +17,18 @@
 - function LanderRocketBase:UseDronePrefab(bulk) 
 - added button and xtemplate for prefabs
 - function LanderRocketBase:GetEntrancePoints(entrance_type, spot_name) 
-- function LanderRocketBase:BLRgetDroneExitPoint() 
-- function LanderRocketBase:BuildWaypointChains() 
 - function LanderRocketBase:GetEntrance(target, entrance_type, spot_name) 
-- check for waypoint_chains and fix if needed
 - LanderRocketBase:BLRgetCargoRequested() new
 - LanderRocketBase:BLRfixCargoAnomolies() new
+- function LanderRocketBase:UnloadDrones(drones)
+- function LanderRocketBase:SpawnDronesFromEarth()
 
 #### Removed
 - removed local BLRonAction function - not used but placed into the unused code lua file in dir
+- function LanderRocketBase:BuildWaypointChains() not needed
+- function LanderRocketBase:BLRgetDroneExitPoint()  not needed
+- function LanderRocketBase:BuildWaypointChains() not needed
+- removed - check for waypoint_chains and fix if needed
 
 #### Fixed Issues
 - possible runaway or invalid condition when cancelling flight

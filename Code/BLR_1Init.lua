@@ -629,16 +629,14 @@ function OnMsg.ClassesGenerate()
   end -- DroneBase:CanBeControlled()
 
 
-  local Old_LanderRocketBase_Unload = LanderRocketBase.Unload
-  function LanderRocketBase:Unload()
-    print("+++ UNLOAD called +++")
-    Old_LanderRocketBase_Unload(self)
-  end
-
+  -- new function to prevent using the ancestor
+  -- the ancestor duplicates the drones from the cargo
   function LanderRocketBase:SpawnDronesFromEarth()
     -- we dont need no stinkin drones from earth
-    print("Earth Spawns")
-  end
+    -- purposely left blank to prevent the Unload command from generating drones during that call.
+    -- we'll make our own drones in UnLoadDrones()
+  end -- LanderRocketBase:SpawnDronesFromEarth()
+
 
   -- new function to override ancestor
   -- fix drones unloading from under rocket
@@ -647,8 +645,8 @@ function OnMsg.ClassesGenerate()
     DoneObjects(self.drones)
     self.drones = {}
     local amount = self.cargo.Drone and self.cargo.Drone.amount or 0
-    print("+++ Unloading Drones: ", amount)
-    self.cargo.Drone.amount = 0
+    if lf_print then print("+++ Unloading Drones: ", amount) end
+    self.cargo.Drone.amount = 0 -- to prevent the unload cargo function from attempting to unload drones.
     CreateGameTimeThread(function(rocket, amount)
       while amount > 0 do
         local drone = rocket:SpawnDrone()
