@@ -40,6 +40,8 @@
 
 #### Todo
 - Manual Unload
+- Filter picks unemployed first
+- Short circuits
 
 --------------------------------------------------------
 ## [v1.2] 10/13/21 3:35:59 AM

@@ -621,7 +621,7 @@ function OnMsg.ClassesGenerate()
 
   -- from DroneBase
   -- This use to be DroneBase:CanBeControlled()  but they hosed that with a duplicate function of the same name
-  -- So putting  it the mod to see what the hell happens.
+  -- So putting it in the mod to see what the hell happens.
   local Old_DroneBase_CanBeControlled = DroneBase.CanBeControlled
   function DroneBase:CanBeControlled()
     if not g_BLR_Options.modEnabled then return Old_DroneBase_CanBeControlled(self) end -- short circuit
