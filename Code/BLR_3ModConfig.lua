@@ -11,6 +11,7 @@ local lf_print = false -- Setup debug printing in local file
 local StringIdBase = 17764706000 -- Better Lander Rockets    : 706000 - 706199  This File Start 0-49, Next: 8
 local mod_name = "Better Lander Rockets"
 local steam_id = "2619013940"
+local popsd    = "8eaa3645-4bed-4b1c-880d-28d91dc912ca"
 local TableFind  = table.find
 local ModConfig_id        = "1542863522"
 local ModConfigWaitThread = false
@@ -149,7 +150,8 @@ end -- function end
 
 
 function OnMsg.NewDay(day)
-  if table.find(ModsLoaded, "steam_id", steam_id)~= nil then
+  if table.find(ModsLoaded, "steam_id", steam_id)~= nil and
+     table.find(ModsLoaded, "pops_desktop_uuid", popsd)~= nil then
     --nothing
   else
     SRDailyPopup()
