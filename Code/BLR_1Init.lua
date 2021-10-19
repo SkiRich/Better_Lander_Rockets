@@ -349,7 +349,9 @@ function OnMsg.ClassesGenerate()
         CreateGameTimeThread(function()
           rocket:LeadOut(drone)
         end)
-        Sleep(2000)
+        while drone.holder do
+          Sleep(100)
+        end -- while still exiting
         drone:SetCommand("GoHome", nil, nil, droneexit, "ReturningToController")
       end -- if IsValid
     end, drone, self) -- thread
@@ -363,20 +365,20 @@ function OnMsg.ClassesGenerate()
   function LanderRocketBase:UseDronePrefab(bulk)
     if not g_BLR_Options.modEnabled then return Old_LanderRocketBase_UseDronePrefab(self, bulk) end -- short circuit
     bulk = bulk and 5 or 1
-    self.drones = self.drones or 0
+    self.drones = self.drones or empty_table
     local maxdrones = self:GetMaxDrones()
-    local prefabs = self.city.drone_prefabs or 0
-    CreateGameTimeThread(function(bulk, prefabs, rocket)
-      while bulk > 0 and prefabs > 0 and #rocket.drones < maxdrones do
+    CreateGameTimeThread(function(bulk, rocket)
+      local city = rocket.city
+      while bulk > 0 and city.drone_prefabs and city.drone_prefabs > 0 and #rocket.drones < maxdrones do
         local drone = rocket:SpawnDrone()
         if drone then
-          rocket.city.drone_prefabs = rocket.city.drone_prefabs - 1
+          city.drone_prefabs = city.drone_prefabs - 1
           table.insert_unique(rocket.drones, drone)
         end -- if drone
         bulk = bulk - 1
         Sleep(250)
       end -- bulk > 0
-    end, bulk, prefabs, self) -- thread
+    end, bulk, self) -- thread
   end -- LanderRocketBase:UseDronePrefab(bulk)  
   
   

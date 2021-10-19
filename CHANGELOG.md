@@ -1,4 +1,21 @@
 # Better Lander Rockets
+## [v1.3.1] 10/19/21 1:05:11 AM
+#### Added
+- new deadhand
+
+#### Changed
+- LanderRocketBase:SpawnDrone()
+- LanderRocketBase:UseDronePrefab(bulk) 
+
+#### Fixed Issues
+- elevator door not opening on spawndrone
+- allowed to go negative on drone prefabs
+
+#### Todo
+- Manual Unload
+- Filter picks unemployed first
+
+--------------------------------------------------------
 ## [v1.3] 10/13/21 11:09:21 PM
 #### New
 - Pack Unpack Drones on the rocket
@@ -41,7 +58,7 @@
 #### Todo
 - Manual Unload
 - Filter picks unemployed first
-- Short circuits
+- Fix UseDronePrefabs to have self.drones = self.drones or empty_table instead of 0
 
 --------------------------------------------------------
 ## [v1.2] 10/13/21 3:35:59 AM

@@ -1,8 +1,8 @@
 return PlaceObj('ModDef', {
 	'title', "Better Lander Rockets",
-	'description', "Better Lander Rockets\nv1.3.0  Oct 16th, 2021\nby SKiRich\nhttps://steamcommunity.com/sharedfiles/filedetails/?id=2619013940",
+	'description', "Better Lander Rockets\nv1.3.1  Oct 19th, 2021\nby SKiRich\nhttps://steamcommunity.com/sharedfiles/filedetails/?id=2619013940",
 	'image', "BLRlogo.png",
-	'last_changes', "v1.3.0 Oct 16th, 2021",
+	'last_changes', "v1.3.1 Oct 19th, 2021",
 	'id', "moSrUdg",
 	'steam_id', "2619013940",
 	'pops_desktop_uuid', "8eaa3645-4bed-4b1c-880d-28d91dc912ca",
