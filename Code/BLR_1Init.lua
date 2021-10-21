@@ -2,7 +2,7 @@
 -- Author @SkiRich
 -- All rights reserved, duplication and modification prohibited.
 -- Created Sept 20th, 2021
--- Updated Oct 14th, 2021
+-- Updated Oct 30th, 2021
 
 
 local lf_print        = false  -- Setup debug printing in local file -- use Msg("ToggleLFPrint", "BLR", "printdebug") to toggle
@@ -346,9 +346,13 @@ function OnMsg.ClassesGenerate()
       if IsValid(drone) then
         local droneexit = rocket:GetSpotLoc(rocket:GetSpotBeginIndex(rocket.drone_spawn_spot)) 
         drone:SetPos(droneexit)
+        drone:SetCommand(false) -- otherwise its Idle while leadout
+        Sleep(10)
         CreateGameTimeThread(function()
+          drone.command_thread = CurrentThread()
           rocket:LeadOut(drone)
         end)
+        Sleep(250)
         while drone.holder do
           Sleep(100)
         end -- while still exiting
