@@ -1,4 +1,12 @@
 # Better Lander Rockets
+## [v1.3.2] 10/20/21 10:41:30 PM
+#### Changed
+- LanderRocketBase:SpawnDrone()  
+
+#### Fixed Issues
+- preventing crash or spurious drone behaviour on leadout
+
+--------------------------------------------------------
 ## [v1.3.1] 10/19/21 1:05:11 AM
 #### Added
 - new deadhand
