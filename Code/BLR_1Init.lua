@@ -169,6 +169,22 @@ local function BLRconvertDateTime(currentTime)
 end -- BLRconvertDateTime()
 
 
+-- copy of old ExpeditionPickDroneFrom from Picard-HF4
+-- no longer exists, fuck it its mine now.
+-- filter is in the function calling it
+local function PickDroneFrom(controller, picked, filter)
+	local drone = nil
+	for _, d in ipairs(controller.drones or empty_table) do
+		if d:CanBeControlled() and not table.find(picked, d) then
+			if (not filter or filter(d)) then
+				if not drone or drone.command ~= "Idle" and d.command == "Idle" then -- prefer idling drones
+					drone = d
+				end -- if not drone
+			end -- if not filter
+		end -- if d:CanBeControlled
+	end -- for _, d
+	return drone
+end -- function PickDroneFrom
 
 
 --------------------------------------------------------------------------------------------------
@@ -244,17 +260,24 @@ function OnMsg.ClassesBuilt()
       if lf_printd then print("-- g_BLR_PayloadRequest_Thread Thread Exited --") end
     end) -- thread
     
-
-    if self:AutoLoadCargoEnabled() then
-      CloseDialog("PayloadRequest")
-      CargoTransporter.OpenPayloadDialog(self, "PayloadPriority", self, {
-        meta_key = const.vkControl,
-        close_on_rmb = true
-      })
+    if LuaRevision >= 1009232 then -- for beta code
+      if self:CanRequestPayload() then
+        self:OpenPayloadDialog("PayloadRequest", self, {
+          meta_key = const.vkControl,
+          close_on_rmb = true })
+      end -- if self:CanRequestPayload()
     else
-      CloseDialog("PayloadPriority")
-      CargoTransporter.UIEditPayloadRequest(self)
-    end
+      if self:AutoLoadCargoEnabled() then 
+        CloseDialog("PayloadRequest") 
+        CargoTransporter.OpenPayloadDialog(self, "PayloadPriority", self, { 
+          meta_key = const.vkControl, 
+          close_on_rmb = true 
+        }) 
+      else 
+        CloseDialog("PayloadPriority") 
+        CargoTransporter.UIEditPayloadRequest(self) 
+      end
+    end -- if LuaRevision
 
   end -- LanderRocketBase:UIEditPayloadRequest()
 
@@ -721,7 +744,7 @@ function OnMsg.ClassesGenerate()
   
   		-- prefer own drones first
   		while #found_drones < num_drones and #(self.drones or empty_table) > 0 do
-  			local drone = ExpeditionPickDroneFrom(self, found_drones, dronefilter)
+  			local drone = PickDroneFrom(self, found_drones, dronefilter)
   			if not drone then
   				break
   			end -- not drone
@@ -926,12 +949,42 @@ function OnMsg.ClassesGenerate()
   end -- CargoTransporter:BLRexpeditionGatherCrew(num_crew, label, quick_load)
 
 
+  -- new function
+  -- just in case they delete the original as well
+  function CargoTransporter:BLRExpeditionLoadCrew(crew)
+    for _, unit in pairs(crew) do
+      if unit == SelectedObj then
+        SelectObj()
+      end
+      unit:SetDome(false)
+      if not unit:IsValidPos() then
+        unit:SetPos(self:GetPos())
+      end
+      unit:SetHolder(self)
+      unit:SetCommand("Disappear", "keep in holder")
+    end
+  end -- CargoTransporter:BLRExpeditionLoadCrew(crew)
+
+
+  -- new function
+  -- copy of ExpeditionGatherPrefabs from Picard-HF4 which no longer exists
+  function CargoTransporter:BLRExpeditionGatherPrefabs(num_prefabs, prefab)
+  	local city = self.city or MainCity
+  	local available_prefabs = city:GetPrefabs(prefab)
+  	if available_prefabs >= num_prefabs then
+  		return num_prefabs
+  	else
+  		return available_prefabs
+  	end
+  end -- CargoTransporter:BLRExpeditionGatherPrefabs(num_prefabs, prefab)
+
+
   -- rewrite from CargoTransporter.lua
   -- used to add some code to stop the forever while loop when a rocket launch is cancelled
   local Old_CargoTransporter_Load = CargoTransporter.Load
-  function CargoTransporter:Load(manifest, quick_load)
-    if not g_BLR_Options.modEnabled or (not IsKindOf(self, "LanderRocketBase")) then return Old_CargoTransporter_Load(self, manifest, quick_load) end -- short circuit
-    if lf_print then print("CargoTransporter:Find running") end
+  function CargoTransporter:Load(manifest, quick_load, transfer_available)
+    if not g_BLR_Options.modEnabled or (not IsKindOf(self, "LanderRocketBase")) then return Old_CargoTransporter_Load(self, manifest, quick_load, transfer_available) end -- short circuit
+    if lf_print then print("CargoTransporter:Load running") end
     
     self.boarding = {}
     self.departures = {}
@@ -979,7 +1032,7 @@ function OnMsg.ClassesGenerate()
     self:BLRExpeditionLoadDrones(drones, quick_load)
     SetCargoAmount(self.cargo, "Drone", #drones)
     
-    self:ExpeditionLoadCrew(crew)
+    self:BLRExpeditionLoadCrew(crew)
     for _, member in pairs(crew) do
       if member.traits.Tourist then
         SetCargoAmount(self.cargo, "Tourist", 1)
@@ -993,16 +1046,16 @@ function OnMsg.ClassesGenerate()
       self.city:AddPrefabs(prefab.class, -prefab.amount, false)
     end -- for _
     return rovers, drones, crew, prefabs
-  end -- CargoTransporter:Load(manifest, quick_load)
+  end -- CargoTransporter:Load(manifest, quick_load, transfer_available)
 
 
-
+  -- no longer exists anymore after LuaRevision 1009232
   -- rewrite from CargoTransporter.lua
   -- hooking into this function to avoid conflict with choggies Expedition Use Nearest mod
   -- called from CargoTransporter:Load(manifest, quick_load) or LanderRocketBase:Load(manifest, quick_load)
-  local Old_CargoTransporter_Find = CargoTransporter.Find
+  -- local Old_CargoTransporter_Find = CargoTransporter.Find
   function CargoTransporter:Find(manifest, quick_load)
-    if not g_BLR_Options.modEnabled or (not IsKindOf(self, "LanderRocketBase")) then return Old_CargoTransporter_Find(self, manifest, quick_load) end -- short circuit
+    --if not g_BLR_Options.modEnabled or (not IsKindOf(self, "LanderRocketBase")) then return Old_CargoTransporter_Find(self, manifest, quick_load) end -- short circuit
     if lf_print then print("CargoTransporter:Find running") end
     
     local rovers = {}
@@ -1047,7 +1100,7 @@ function OnMsg.ClassesGenerate()
       return v > 0
     end)
     for prefab, count in pairs(manifest_prefabs) do
-      local available_count = self:ExpeditionGatherPrefabs(count, prefab)
+      local available_count = self:BLRExpeditionGatherPrefabs(count, prefab)
       if not quick_load and count > available_count then
         self.prefab_count_fail = true
         if lf_print then print("-Counting prefabs failed-") end
