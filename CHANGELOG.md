@@ -10,19 +10,14 @@
 - PickDroneFrom(controller, picked, filter) 
 - CargoTransporter:BLRExpeditionLoadCrew(crew) 
 - CargoTransporter:BLRExpeditionGatherPrefabs(num_prefabs, prefab) 
-
-#### Removed
+- function LanderRocketBase:DeleteOnboardDrones()  - new function
+- function LanderRocketBase:Unload() 
 
 #### Fixed Issues
 - New beta code removed several functions.  Needed make them.
 - Dual game version code in LanderRocketBase:UIEditPayloadRequest()
+- DoneObjects in Unload does not get rid of command_threads and destructor threads of onboard rockets
 
-#### Open Issues
-
-#### Deprecated
-
-#### Todo
-- work on done drone issue
 
 --------------------------------------------------------
 ## [v1.3.2] 10/20/21 10:41:30 PM

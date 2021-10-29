@@ -187,6 +187,7 @@ local function PickDroneFrom(controller, picked, filter)
 end -- function PickDroneFrom
 
 
+
 --------------------------------------------------------------------------------------------------
 
 -- just in case they load this mod and dont have the B&B DLC
@@ -1177,6 +1178,47 @@ function OnMsg.ClassesGenerate()
     self.BLR_defaultRocketCargoPreset = cargo
     --ex(self.BLRdefaultRocketCargoPreset)
   end -- LanderRocketBase:BLRresetDefaultPayload(payload)
+  
+  
+  -- new function
+  -- cannot use DoneObjects in Unload otherwise you get orphaned threads
+  function LanderRocketBase:DeleteOnboardDrones()
+    local drones = self.drones or empty_table
+    for _, drone in ipairs(drones) do
+      DeleteThread(drone.thread_running_destructors)
+      DeleteThread(drone.command_thread)
+      DoneObject(drone)
+    end -- for _, drone
+    -- do it again to make sure command thread has been killed after any popdestructors
+    for _, drone in ipairs(drones) do
+      DeleteThread(drone.thread_running_destructors)
+      DeleteThread(drone.command_thread)
+      DoneObject(drone)
+    end -- for _, drone
+    --self.drones = {}
+  end -- LanderRocketBase:DeleteOnboardDrones()
+
+
+  -- re-write from LanderRocket.lua
+  -- cannot use DoneObjects in Unload otherwise you get orphaned threads
+  local Old_LanderRocketBase_Unload = LanderRocketBase.Unload
+  function LanderRocketBase:Unload()
+    if not g_BLR_Options.modEnabled then return Old_LanderRocketBase_Unload(self) end -- short circuit
+    self.stockpiled_amount = {}
+    self.cargo = NormalizeCargo(self.cargo)
+    self:DeleteOnboardDrones()
+    --DoneObjects(self.drones)
+    --self.drones = {}
+    local specializations = GetSortedColonistSpecializationTable()
+    for _, entry in pairs(self.cargo) do
+      local classdef = g_Classes[entry.class]
+      if IsKindOf(classdef, "BaseRover") and self.rovers or table.find(specializations, entry.class) and self.crew then
+        entry.amount = 0
+      end
+      entry.requested = 0
+    end
+    RocketBase.Unload(self)
+  end -- LanderRocketBase:Unload()
   
 
   -- rewrite from ResourceOverview.lua
