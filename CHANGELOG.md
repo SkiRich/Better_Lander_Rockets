@@ -1,4 +1,25 @@
 # Better Lander Rockets
+## [v1.4] 10/29/21 4:02:41 AM
+#### Changed
+- CargoTransporter:BLRexpeditionFindDrones
+- CargoTransporter:Load
+- CargoTransporter:Find(manifest, quick_load) 
+- LanderRocketBase:UIEditPayloadRequest()
+
+#### Added
+- PickDroneFrom(controller, picked, filter) 
+- CargoTransporter:BLRExpeditionLoadCrew(crew) 
+- CargoTransporter:BLRExpeditionGatherPrefabs(num_prefabs, prefab) 
+- function LanderRocketBase:DeleteOnboardDrones()  - new function
+- function LanderRocketBase:Unload() 
+
+#### Fixed Issues
+- New beta code removed several functions.  Needed make them.
+- Dual game version code in LanderRocketBase:UIEditPayloadRequest()
+- DoneObjects in Unload does not get rid of command_threads and destructor threads of onboard rockets
+
+
+--------------------------------------------------------
 ## [v1.3.2] 10/20/21 10:41:30 PM
 #### Changed
 - LanderRocketBase:SpawnDrone()  
