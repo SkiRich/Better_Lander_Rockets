@@ -1054,9 +1054,9 @@ function OnMsg.ClassesGenerate()
   -- rewrite from CargoTransporter.lua
   -- hooking into this function to avoid conflict with choggies Expedition Use Nearest mod
   -- called from CargoTransporter:Load(manifest, quick_load) or LanderRocketBase:Load(manifest, quick_load)
-  -- local Old_CargoTransporter_Find = CargoTransporter.Find
+  local Old_CargoTransporter_Find = CargoTransporter.Find
   function CargoTransporter:Find(manifest, quick_load)
-    --if not g_BLR_Options.modEnabled or (not IsKindOf(self, "LanderRocketBase")) then return Old_CargoTransporter_Find(self, manifest, quick_load) end -- short circuit
+    if not g_BLR_Options.modEnabled or (not IsKindOf(self, "LanderRocketBase")) then return Old_CargoTransporter_Find(self, manifest, quick_load) end -- short circuit
     if lf_print then print("CargoTransporter:Find running") end
     
     local rovers = {}

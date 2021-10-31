@@ -1,4 +1,12 @@
 # Better Lander Rockets
+## [v1.4.1] 10/31/21 5:08:37 AM
+#### Changed
+- function CargoTransporter:Find(manifest, quick_load)
+
+#### Fixed Issues
+- Legacy versions under 1009232 still use Find in Expedition rockets.  Needed to exclude them
+
+--------------------------------------------------------
 ## [v1.4] 10/29/21 4:02:41 AM
 #### Changed
 - CargoTransporter:BLRexpeditionFindDrones
