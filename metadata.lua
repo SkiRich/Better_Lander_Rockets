@@ -8,7 +8,7 @@ return PlaceObj('ModDef', {
 	'pops_desktop_uuid', "8eaa3645-4bed-4b1c-880d-28d91dc912ca",
 	'pops_any_uuid', "8579c7f2-ec22-4464-beda-db1eaa380cf5",
 	'author', "SkiRich",
-	'version', 39,
+	'version', 47,
 	'lua_revision', 1007000,
 	'saved_with_revision', 1009413,
 	'code', {
@@ -16,7 +16,7 @@ return PlaceObj('ModDef', {
 		"Code/BLR_2Panels.lua",
 		"Code/BLR_3ModConfig.lua",
 	},
-	'saved', 1636089119,
+	'saved', 1636105358,
 	'screenshot1', "Images/BLRlogo.png",
 	'screenshot2', "Images/BLRpanel1.png",
 	'screenshot3', "Images/BLRpanel2.png",
