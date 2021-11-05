@@ -2,7 +2,7 @@
 -- Author @SkiRich
 -- All rights reserved, duplication and modification prohibited.
 -- Created Sept 20th, 2021
--- Updated Oct 30th, 2021
+-- Updated Nov 5th, 2021
 
 
 local lf_print        = false  -- Setup debug printing in local file -- use Msg("ToggleLFPrint", "BLR", "printdebug") to toggle
@@ -1159,7 +1159,7 @@ function OnMsg.ClassesGenerate()
     for _, entry in pairs(self.BLR_defaultRocketCargoPreset) do
       payload:SetItem(entry.class, entry.amount)
     end -- for _,
-    CargoTransporter.FixCargoToPayloadObject(self, payload)
+    FixCargoToPayloadObject(payload)
   end -- LanderRocketBase:SetDefaultPayload(payload)
  
   
@@ -1189,13 +1189,7 @@ function OnMsg.ClassesGenerate()
       DeleteThread(drone.command_thread)
       DoneObject(drone)
     end -- for _, drone
-    -- do it again to make sure command thread has been killed after any popdestructors
-    for _, drone in ipairs(drones) do
-      DeleteThread(drone.thread_running_destructors)
-      DeleteThread(drone.command_thread)
-      DoneObject(drone)
-    end -- for _, drone
-    --self.drones = {}
+    self.drones = {}
   end -- LanderRocketBase:DeleteOnboardDrones()
 
 

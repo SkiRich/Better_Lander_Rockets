@@ -1,4 +1,14 @@
 # Better Lander Rockets
+## [v1.4.2] 11/05/21 1:05:11 AM
+#### Changed
+- LanderRocketBase:SetDefaultPayload(payload) 
+- LanderRocketBase:DeleteOnboardDrones() 
+
+#### Fixed Issues
+- beta code removed  CargoTransporter.FixCargoToPayloadObject(self, payload) 
+- throwing errors due to double doneobject deletes in DeleteOnboardDrones()
+
+--------------------------------------------------------
 ## [v1.4.1] 10/31/21 5:08:37 AM
 #### Changed
 - function CargoTransporter:Find(manifest, quick_load)
