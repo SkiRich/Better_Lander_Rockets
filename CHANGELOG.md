@@ -1,4 +1,23 @@
 # Better Lander Rockets
+## [v1.4.3] 11/05/21 5:29:22 AM
+#### Changed
+- function OnMsg.RocketLaunchFromEarth(rocket)
+- function LanderRocketBase:CancelFlight() 
+- function LanderRocketBase:UnloadDrones(drones) 
+
+#### Added
+- self.landed = true to GameInit()
+
+#### Removed
+- function OnMsg.ConstructionComplete(rocket) -  moved to GameInit()
+
+#### Fixed Issues
+- function OnMsg.ConstructionComplete(rocket) was not hitting on LanderRocketBase anymore
+- fixed auto mode - they changed the variable
+- fixed lander stalled on Mars due to missing landed variable.
+- fixed nil check in UnloadDrones
+
+--------------------------------------------------------
 ## [v1.4.2] 11/05/21 1:05:11 AM
 #### Changed
 - LanderRocketBase:SetDefaultPayload(payload) 

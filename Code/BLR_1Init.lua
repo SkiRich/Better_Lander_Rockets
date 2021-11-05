@@ -418,6 +418,7 @@ function OnMsg.ClassesGenerate()
     if not g_BLR_Options.modEnabled then return Old_LanderRocketBase_CancelFlight(self) end -- short circuit
     self.target_spot = false
     self.requested_spot = false
+    self.landed = true
     self:SetCommand("WaitLaunchOrder")
   end -- LanderRocketBase:CancelFlight()
 
@@ -563,6 +564,15 @@ function OnMsg.ClassesGenerate()
     return Old_Asteroids_NotifyRocketsAsteroidMovingOutOfRange(self, asteroid)
   end -- Asteroids:NotifyRocketsAsteroidMovingOutOfRange(asteroid)
 
+  -- rewrite from LanderRocket.lua
+  -- we need to add a few things
+  local Old_LanderRocketBase_GameInit = LanderRocketBase.GameInit
+  function LanderRocketBase:GameInit()
+    self.auto_load_enabled = false -- old style
+    self.auto_mode_on = false -- new style
+    self.landed = true -- they forgot this one - duh
+    return Old_LanderRocketBase_GameInit(self) 
+  end -- LanderRocketBase:GameInit()
 
   -- new function for use here
   function LanderRocketBase:IsLandedOnAsteroid()
@@ -672,11 +682,12 @@ function OnMsg.ClassesGenerate()
   -- fix drones unloading from under rocket
   local Old_CargoTransporter_UnloadDrones = CargoTransporter.UnloadDrones
   function LanderRocketBase:UnloadDrones(drones)
+    self.cargo = self.cargo or {} -- just in case
     DoneObjects(self.drones)
     self.drones = {}
     local amount = self.cargo.Drone and self.cargo.Drone.amount or 0
     if lf_print then print("+++ Unloading Drones: ", amount) end
-    self.cargo.Drone.amount = 0 -- to prevent the unload cargo function from attempting to unload drones.
+    if amount > 0 then self.cargo.Drone.amount = 0 end -- to prevent the unload cargo function from attempting to unload drones.
     CreateGameTimeThread(function(rocket, amount)
       while amount > 0 do
         local drone = rocket:SpawnDrone()
@@ -1283,21 +1294,14 @@ function OnMsg.RocketLanded(rocket)
 end -- OnMsg.RocketLanded(rocket)
 
 
-
 function OnMsg.SpawnedAsteroid(asteroid)
   -- add variables to newly discover asteroids
   asteroid.BLR_extendedTime = false
 end -- OnMsg.SpawnedAsteroid(asteroid)
 
 
--- on rocket built on mars disable auto load
-function OnMsg.ConstructionComplete(rocket)
-  if IsKindOf(rocket, "LanderRocketBase") then rocket.auto_load_enabled = false end
-end -- OnMsg.ConstructionComplete(rocket)
-
-
 function OnMsg.RocketLaunchFromEarth(rocket)
-  if IsKindOf(rocket, "LanderRocketBase") then rocket.auto_load_enabled = false end
+  if IsKindOf(rocket, "LanderRocketBase") then rocket.auto_mode_on = false end
 end -- OnMsg.RocketLaunchFromEarth(rocket)
 
 
